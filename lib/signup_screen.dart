@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'main.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
@@ -22,7 +23,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   String _selectedAptNo = '1';
 
   Future<void> _submitSignUp() async {
-    final url = Uri.parse('http://10.0.2.2:3000/api/signup');
+    final url = Uri.parse('$baseUrl/api/signup');
 
     Map<String, dynamic> signUpData = {
       "u_id": _idController.text,

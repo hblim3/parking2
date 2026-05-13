@@ -35,7 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (token == null) return; // 로그인 토큰이 없으면 중단
 
-    final url = Uri.parse('http://10.0.2.2:3000/api/user-info');
+    final url = Uri.parse('$baseUrl/api/user-info');
 
     try {
       final response = await http.get(

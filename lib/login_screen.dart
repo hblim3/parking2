@@ -29,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
-      final url = Uri.parse('http://10.0.2.2:3000/api/login');
+      final url = Uri.parse('$baseUrl/api/login');
       final response = await http.post(
         url,
         headers: {"Content-Type": "application/json"},

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http; // 통신 도구
 import 'dart:convert'; // 통신 도구
 import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 💡 이 줄이 꼭 있어야 합니다!
+import 'main.dart';
 
 class ParkingScreen extends StatefulWidget {
   const ParkingScreen({Key? key}) : super(key: key);
@@ -26,7 +27,7 @@ class _ParkingScreenState extends State<ParkingScreen> {
     setState(() => isLoading = true);
 
     // 💡 나중에 서버 컴퓨터(또는 AWS)의 진짜 IP 주소로 바꿔야 합니다!
-    final url = Uri.parse('http://10.0.2.2:3000/api/parking-zones');
+    final url = Uri.parse('$baseUrl/api/parking-zones');
 
     try {
       final response = await http.get(url);
@@ -150,7 +151,7 @@ class _ParkingScreenState extends State<ParkingScreen> {
               if (token == null) return;
 
               // 2. 서버로 대기열 신청 보내기 (target: 'ALL' 또는 'A-1')
-              final url = Uri.parse('http://10.0.2.2:3000/api/waitlist');
+              final url = Uri.parse('$baseUrl/api/waitlist');
               try {
                 final response = await http.post(
                   url,
@@ -271,6 +272,11 @@ class _ParkingScreenState extends State<ParkingScreen> {
       itemBuilder: (context, index) {
         final slotData = floorSlots[index];
         final type = slotData['type'];
+        // 👇 여기에 공백 처리 코드를 추가합니다! 👇
+        if (type == 'blank') {
+          return const SizedBox(); // 아무것도 그리지 않고 투명한 공간만 차지함
+        }
+        // 👆 추가 끝 👆
         final isOccupied = slotData['isOccupied'];
         final slotName = slotData['slot'];
         final parkedCarNumber = slotData['current_car_number'];

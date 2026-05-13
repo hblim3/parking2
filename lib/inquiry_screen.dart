@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http; // 👈 추가!
 import 'dart:convert'; // 👈 추가!
 import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 👈 토큰(출입증)용 추가!
+import 'main.dart';
 
 class InquiryScreen extends StatefulWidget {
   const InquiryScreen({Key? key}) : super(key: key);
@@ -25,7 +26,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
 
     if (token == null) return;
 
-    final url = Uri.parse('http://10.0.2.2:3000/api/inquiries');
+    final url = Uri.parse('$baseUrl/api/inquiries');
 
     try {
       final response = await http.get(
@@ -61,7 +62,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
     const storage = FlutterSecureStorage();
     String? token = await storage.read(key: 'jwt_token');
 
-    final url = Uri.parse('http://10.0.2.2:3000/api/inquiries');
+    final url = Uri.parse('$baseUrl/api/inquiries');
 
     try {
       final response = await http.post(
@@ -297,7 +298,34 @@ class _InquiryScreenState extends State<InquiryScreen> {
                           ),
                         ),
                         const SizedBox(height: 6),
-
+                        // inquiry_screen.dart 리스트 빌더 내부
+                        // ... 기존 날짜 표시 아래에 추가 ...
+                        if (item['admin_answer'] != null)
+                          Container(
+                            margin: const EdgeInsets.only(top: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.blueGrey[50], // 답변 칸 배경색
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '🛡️ 관리자 답변',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  item['admin_answer'],
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
                         // 하단: 날짜
                         Text(
                           item['date']!,
@@ -312,6 +340,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                 );
               },
             ),
+
       // 우측 하단 글쓰기 버튼
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showWriteDialog,

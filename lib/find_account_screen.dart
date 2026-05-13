@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'main.dart';
 
 class FindAccountScreen extends StatefulWidget {
   const FindAccountScreen({Key? key}) : super(key: key);
@@ -23,7 +24,7 @@ class _FindAccountScreenState extends State<FindAccountScreen> {
   final TextEditingController _newPwController = TextEditingController();
 
   Future<void> _findId() async {
-    final url = Uri.parse('http://10.0.2.2:3000/api/find-id');
+    final url = Uri.parse('$baseUrl/api/find-id');
     try {
       final response = await http.post(
         url,
@@ -52,7 +53,7 @@ class _FindAccountScreenState extends State<FindAccountScreen> {
   }
 
   Future<void> _resetPassword() async {
-    final url = Uri.parse('http://10.0.2.2:3000/api/reset-pw');
+    final url = Uri.parse('$baseUrl/api/reset-pw');
     try {
       final response = await http.post(
         url,

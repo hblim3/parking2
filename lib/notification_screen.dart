@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http; // 👈 추가
 import 'dart:convert'; // 👈 추가
 import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 👈 추가
+import 'main.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({Key? key}) : super(key: key);
@@ -30,7 +31,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     if (token == null) return;
 
     // 💡 나중에 AWS 진짜 IP로 변경하세요!
-    final url = Uri.parse('http://10.0.2.2:3000/api/notifications');
+    final url = Uri.parse('$baseUrl/api/notifications');
 
     try {
       final response = await http.get(

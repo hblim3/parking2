@@ -9,8 +9,11 @@ import 'settings_screen.dart'; // 나중에 만들 파일
 import 'car_management_screen.dart'; // 나중에 만들 파일
 import 'notification_screen.dart';
 
+// 💡 지금은 현재 테스트 중인 임의의 서버(에뮬레이터) 주소를 적어둡니다!
+const String baseUrl = 'http://10.0.2.2:3000';
+
 // 전역 변수: 스마트폰 안전 금고 & 다크모드 리모컨
-const storage = FlutterSecureStorage();
+final storage = FlutterSecureStorage();
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
 void main() {
