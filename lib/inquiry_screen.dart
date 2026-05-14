@@ -25,7 +25,6 @@ class _InquiryScreenState extends State<InquiryScreen> {
     String? token = await storage.read(key: 'jwt_token');
 
     if (token == null) return;
-
     final url = Uri.parse('$baseUrl/api/inquiries');
 
     try {
@@ -33,23 +32,27 @@ class _InquiryScreenState extends State<InquiryScreen> {
         url,
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer $token", // 💡 내 출입증(토큰) 보여주기
+          "Authorization": "Bearer $token",
         },
-      );
+      ); // 여기도 .timeout(const Duration(seconds: 3)) 붙여주시면 좋습니다!
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
           if (!mounted) return;
           setState(() {
-            _inquiries = data['inquiries']; // 서버 데이터로 덮어쓰기
-            isLoading = false;
+            _inquiries = data['inquiries'];
+            // 💡 여기서 isLoading = false 를 지웁니다. (finally에서 할 것이므로)
           });
         }
       }
     } catch (e) {
       print("문의 내역 불러오기 실패: $e");
-      if (mounted) setState(() => isLoading = false);
+    } finally {
+      // 💡 핵심 추가: 무조건 통신이 끝나면 로딩 창을 닫아줍니다!
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -78,8 +81,9 @@ class _InquiryScreenState extends State<InquiryScreen> {
         }),
       );
 
-      if (response.statusCode == 200) {
-        _fetchInquiries(); // 💡 성공하면 리스트 다시 불러와서 새로고침!
+      // 👇 [수정] 서버가 200(성공) 또는 201(생성됨)을 보냈을 때 모두 새로고침 하도록 변경!
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _fetchInquiries();
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
@@ -240,7 +244,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
               itemCount: _inquiries.length,
               itemBuilder: (context, index) {
                 final item = _inquiries[index];
-                final statusColor = _getStatusColor(item['status']!);
+                final statusColor = _getStatusColor(item['status'] ?? '대기중');
 
                 return Card(
                   elevation: 0,
@@ -290,7 +294,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
 
                         // 중단: 제목
                         Text(
-                          item['title']!,
+                          item['title'] ?? '제목 없음', // null 방지
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -298,8 +302,16 @@ class _InquiryScreenState extends State<InquiryScreen> {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        // inquiry_screen.dart 리스트 빌더 내부
-                        // ... 기존 날짜 표시 아래에 추가 ...
+                        Text(
+                          item['content'] ?? '내용이 없습니다.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // 👆 여기까지 추가 완료 👆
                         if (item['admin_answer'] != null)
                           Container(
                             margin: const EdgeInsets.only(top: 12),
