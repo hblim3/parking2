@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'main.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class CarManagementScreen extends StatefulWidget {
   const CarManagementScreen({Key? key}) : super(key: key);
@@ -22,24 +23,39 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
     _fetchCars();
   }
 
-  // 1. 서버에서 차량 목록 불러오기 (나중을 대비한 코드)
+  // 1. 서버에서 차량 목록 불러오기 (토큰 추가 완료)
   Future<void> _fetchCars() async {
+    const storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'jwt_token');
+
+    if (token == null) {
+      setState(() => isLoading = false);
+      return;
+    }
+
     final url = Uri.parse('$baseUrl/api/cars');
     try {
-      final response = await http.get(url);
+      final response = await http.get(
+        url,
+        // 💡 서버에게 내 출입증(토큰) 보여주기!
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
           setState(() {
-            // 💡 웹팀에게 "입주민과 방문객 데이터를 따로 주세요"라고 요청하게 될 부분
             residentCars = data['resident_cars'] ?? [];
             visitorCars = data['visitor_cars'] ?? [];
           });
         }
+      } else {
+        print('차량 목록 불러오기 거절됨: ${response.statusCode}');
       }
     } catch (e) {
       print("서버 연결 실패 - 시연용 데이터를 표시합니다.");
-      // 💡 현재 임시 서버에서는 이 가짜 데이터가 화면에 보일 것입니다.
       setState(() {
         residentCars = [
           {"c_number": "12가 3456", "c_name": "제네시스", "c_note": "법인차량"},
@@ -57,33 +73,48 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
     }
   }
 
-  // 2. 서버에 새 차량 등록하기
+  // 2. 서버에 새 차량 등록하기 (토큰 추가 & baseUrl 적용 완료)
   Future<void> _addCar(
     String carNumber,
     String carName,
     String carType,
     String carNote,
   ) async {
-    final url = Uri.parse('http://10.0.2.2:3000/api/cars');
+    const storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'jwt_token');
+
+    if (token == null) return;
+
+    // 💡 $baseUrl 로 수정 완료!
+    final url = Uri.parse('$baseUrl/api/cars');
     try {
       final response = await http.post(
         url,
-        headers: {"Content-Type": "application/json"},
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token", // 💡 서버에게 내 출입증(토큰) 보여주기!
+        },
         body: jsonEncode({
           "c_number": carNumber,
           "c_name": carName,
-          "car_type": carType, // '입주민' 또는 '방문객'
+          "car_type": carType,
           "c_note": carNote,
         }),
       );
 
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
-        _fetchCars();
+        _fetchCars(); // 💡 등록 성공 시 목록 새로고침
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('등록 완료')));
+      } else {
+        // 서버에서 에러 메시지를 보낸 경우 (예: "방문객 등록 에러")
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(data['message'] ?? '등록 실패')));
       }
     } catch (e) {
       print("차량 등록 실패: $e");

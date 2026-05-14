@@ -5,6 +5,7 @@ import 'package:parking2/car_management_screen.dart';
 import 'package:parking2/login_screen.dart';
 import 'dart:convert'; // 👈 추가!
 import 'main.dart';
+import 'package:parking2/inquiry_screen.dart'; // 💡 패키지 명에 맞춰 수정 필요
 
 // ...
 class SettingsScreen extends StatefulWidget {
@@ -128,15 +129,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 12),
 
-          // 4. 고객 지원 및 계정 (inquiries, logout)
+          // 4. 고객 지원 및 계정
           _buildSectionTitle('고객 지원 및 계정'),
           _buildMenuItem(
             icon: Icons.chat_bubble_outline,
             title: '내 민원 내역 확인',
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('민원 내역 페이지로 이동합니다.')),
-              );
+              // 💡 기존 SnackBar 코드를 지우고 아래 한 줄을 넣습니다!
+              _navigateTo(const InquiryScreen());
             },
           ),
           _buildMenuItem(

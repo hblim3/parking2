@@ -328,7 +328,10 @@ class _InquiryScreenState extends State<InquiryScreen> {
                           ),
                         // 하단: 날짜
                         Text(
-                          item['date']!,
+                          // 💡 'created_at'으로 이름을 맞추고, 값이 없을 때를 대비한 안전장치 추가!
+                          item['created_at'] != null
+                              ? item['created_at'].toString()
+                              : '날짜 정보 없음',
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,

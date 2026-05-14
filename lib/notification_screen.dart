@@ -28,9 +28,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
     const storage = FlutterSecureStorage();
     String? token = await storage.read(key: 'jwt_token');
 
-    if (token == null) return;
+    if (token == null) {
+      setState(() => isLoading = false);
+      return;
+    }
 
-    // 💡 나중에 AWS 진짜 IP로 변경하세요!
     final url = Uri.parse('$baseUrl/api/notifications');
 
     try {
@@ -47,18 +49,22 @@ class _NotificationScreenState extends State<NotificationScreen> {
         if (data['success'] == true) {
           if (!mounted) return;
           setState(() {
-            // 💡 서버 DB의 컬럼명과 앱의 변수명을 맞춰주는 과정입니다.
             notifications = List<Map<String, dynamic>>.from(
               data['notifications'],
             );
-            isLoading = false;
           });
         }
+      } else {
+        print("서버 에러 발생: 상태 코드 ${response.statusCode}");
       }
     } catch (e) {
-      print("알림 목록 불러오기 실패: $e");
-      // 통신 실패 시 시연을 위해 기존 가짜 데이터를 유지하거나 빈 리스트를 보여줍니다.
-      if (mounted) setState(() => isLoading = false);
+      print("알림 목록 불러오기 실패 (네트워크 등): $e");
+    } finally {
+      // 💡 핵심 수정: 통신이 성공하든, 404 에러가 나든, 와이파이가 끊기든
+      // 이 로직의 끝에서는 무조건 로딩(isLoading)을 false로 꺼줍니다!
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
