@@ -219,6 +219,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // 로그아웃 로직 (회원님 코드 적용)
   void _handleLogout() async {
     const storage = FlutterSecureStorage();
+    // 👇 여기서부터 새롭게 추가된 [FCM 토큰 삭제 요청 로직] 👇
+    try {
+      String? token = await storage.read(key: 'jwt_token');
+      if (token != null) {
+        // 서버로 알림 주소 폐기 통신 (DELETE 방식)
+        await http.delete(
+          Uri.parse('$baseUrl/api/device-token'),
+          headers: {"Authorization": "Bearer $token"},
+        );
+      }
+    } catch (e) {
+      print("FCM 토큰 삭제 통신 실패 (서버 연동 전까지는 무시하셔도 됩니다): $e");
+    }
+    // 👆 여기까지 추가 완료 👆
     await storage.delete(key: 'jwt_token');
 
     if (!mounted) return;

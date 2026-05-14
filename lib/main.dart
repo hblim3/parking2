@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 // 👇 새로 설치한 파이어베이스 패키지와 설정 파일 불러오기
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // 👈 포그라운드 알림 수신용 추가!
 // 💡 분리된 방(파일)들을 불러옵니다. (아직 안 만든 파일은 빨간 줄이 뜰 수 있지만 괜찮습니다!)
 import 'login_screen.dart';
 import 'parking_screen.dart'; // 이미 있으신 파일
@@ -100,6 +101,58 @@ class MainTabScreen extends StatefulWidget {
 
 class _MainTabScreenState extends State<MainTabScreen> {
   int _selectedIndex = 0;
+  // 👇 여기서부터 새롭게 추가 👇
+  @override
+  void initState() {
+    super.initState();
+    _setupForegroundFCM(); // 메인 화면이 켜지면 수신기를 켭니다.
+  }
+
+  // 💡 앱을 사용 중일 때 날아오는 푸시 알림을 낚아채서 화면에 띄워주는 수신기
+  void _setupForegroundFCM() async {
+    // 👇 [여기가 추가된 핵심 코드] 스마트폰 운영체제에게 알림 권한 허락받기
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
+    // 👆 여기까지 추가 완료 👆
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.notification != null) {
+        if (!mounted) return;
+
+        // 화면 하단에 알림 팝업(스낵바) 띄우기
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.black87, // 시크한 검은색 배경
+            behavior: SnackBarBehavior.floating, // 살짝 떠있는 디자인
+            margin: const EdgeInsets.all(16),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  message.notification!.title ?? '알림',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(message.notification!.body ?? ''),
+              ],
+            ),
+            duration: const Duration(seconds: 4), // 4초 후 사라짐
+            action: SnackBarAction(
+              label: '확인하기',
+              textColor: Colors.blueAccent,
+              onPressed: () {
+                // '확인하기'를 누르면 알림 탭(인덱스 2)으로 자동 이동!
+                setState(() => _selectedIndex = 2);
+              },
+            ),
+          ),
+        );
+      }
+    });
+  }
 
   // 💡 탭을 눌렀을 때 보여줄 화면들 (아직 안 만든 파일은 주차장 화면으로 임시 대체해 둡니다)
   final List<Widget> _pages = [

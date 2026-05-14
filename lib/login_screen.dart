@@ -5,6 +5,7 @@ import 'main.dart';
 import 'signup_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'find_account_screen.dart'; // 💡 아이디/비밀번호 찾기 화면 연결!
+import 'package:firebase_messaging/firebase_messaging.dart'; // 👈 추가!
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -42,6 +43,25 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
           await storage.write(key: 'jwt_token', value: data['token']);
+          // 👇 여기서부터 새롭게 추가된 [FCM 토큰 전송 로직] 👇
+          try {
+            // 파이어베이스에서 내 폰의 고유 주소를 뽑아옵니다.
+            String? fcmToken = await FirebaseMessaging.instance.getToken();
+            if (fcmToken != null) {
+              await http.post(
+                Uri.parse('$baseUrl/api/device-token'), // 토큰 저장 API
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer ${data['token']}",
+                },
+                body: jsonEncode({"fcm_token": fcmToken}),
+              );
+            }
+          } catch (e) {
+            // 지금 테스트 서버에선 주소가 없어서 일로 빠지지만 앱은 멈추지 않습니다!
+            print("FCM 토큰 전송 실패 (서버 연동 전까지는 무시하셔도 됩니다): $e");
+          }
+          // 👆 여기까지 추가 완료 👆
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const MainTabScreen()),
