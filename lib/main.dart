@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
+// 👇 새로 설치한 파이어베이스 패키지와 설정 파일 불러오기
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 // 💡 분리된 방(파일)들을 불러옵니다. (아직 안 만든 파일은 빨간 줄이 뜰 수 있지만 괜찮습니다!)
 import 'login_screen.dart';
 import 'parking_screen.dart'; // 이미 있으신 파일
@@ -16,7 +18,14 @@ const String baseUrl = 'http://10.0.2.2:3000';
 final storage = FlutterSecureStorage();
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
-void main() {
+void main() async {
+  // 1. 플러터 엔진과 프레임워크가 자리를 잡을 때까지 기다립니다.
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 2. 파이어베이스를 우리 앱의 설정값(DefaultFirebaseOptions)으로 초기화합니다.
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // 3. 모든 준비가 끝나면 비로소 앱을 실행합니다.
   runApp(const MyApp());
 }
 
@@ -30,7 +39,7 @@ class MyApp extends StatelessWidget {
       builder: (_, ThemeMode currentMode, __) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: '스마트 주차 관리',
+          title: 'Park On',
           theme: ThemeData.light(),
           darkTheme: ThemeData.dark(),
           themeMode: currentMode,
@@ -120,7 +129,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
             icon: Icon(Icons.local_parking),
             label: '주차장',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.forum), label: '문의게시판'),
+          BottomNavigationBarItem(icon: Icon(Icons.forum), label: '문의'),
           BottomNavigationBarItem(icon: Icon(Icons.notifications), label: '알림'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: '설정'),
         ],

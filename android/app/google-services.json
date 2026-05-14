@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "239037972513",
+    "project_id": "park-on-c33b4",
+    "storage_bucket": "park-on-c33b4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:239037972513:android:282bffb97af4df48f6e360",
+        "android_client_info": {
+          "package_name": "com.example.parking2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFlkI4j0LQbo2LwMEHXdEBEDx719QyK4k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

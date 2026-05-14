@@ -11,6 +11,7 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
+  // 컨트롤러들 (기존과 동일)
   final TextEditingController _idController = TextEditingController();
   final TextEditingController _pwdController = TextEditingController();
   final TextEditingController _dongController = TextEditingController();
@@ -20,9 +21,45 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
 
-  String _selectedAptNo = '1';
+  // 💡 [수정] 서버에서 받아온 아파트 목록을 저장할 변수
+  List<dynamic> _aptList = [];
+  String? _selectedAptNo; // 선택된 아파트 번호 (a_no)
+  bool _isLoadingApts = true; // 아파트 목록 로딩 상태
+
+  @override
+  void initState() {
+    super.initState();
+    _loadApartments(); // 💡 화면이 시작될 때 목록을 불러옵니다.
+  }
+
+  // 💡 [추가] 서버에서 아파트 목록(a_no, a_name)을 가져오는 함수
+  Future<void> _loadApartments() async {
+    final url = Uri.parse('$baseUrl/api/apartments');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          if (!mounted) return;
+          setState(() {
+            _aptList = data['apartments'];
+            // 첫 번째 아파트를 기본값으로 설정
+            if (_aptList.isNotEmpty) {
+              _selectedAptNo = _aptList[0]['a_no'].toString();
+            }
+            _isLoadingApts = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("아파트 목록 불러오기 실패: $e");
+      if (mounted) setState(() => _isLoadingApts = false);
+    }
+  }
 
   Future<void> _submitSignUp() async {
+    if (_selectedAptNo == null) return;
+
     final url = Uri.parse('$baseUrl/api/signup');
 
     Map<String, dynamic> signUpData = {
@@ -33,9 +70,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       "u_phone": _phoneController.text,
       "u_dong": _dongController.text,
       "u_ho": _hoController.text,
-      "a_no": int.parse(_selectedAptNo),
+      "a_no": int.parse(_selectedAptNo!), // 💡 선택된 번호 사용
       "a_pwd": _aptPwdController.text,
     };
+
     try {
       final response = await http.post(
         url,
@@ -77,20 +115,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: _selectedAptNo,
-              decoration: const InputDecoration(
-                labelText: '아파트 선택',
-                border: OutlineInputBorder(),
-              ),
-              items: const [
-                DropdownMenuItem(value: '1', child: Text('명학 아파트')),
-                DropdownMenuItem(value: '2', child: Text('성결 아파트')),
-                DropdownMenuItem(value: '3', child: Text('안양 아파트')),
-              ],
-              onChanged: (value) => setState(() => _selectedAptNo = value!),
-            ),
+
+            // 💡 [수정] 동적으로 생성되는 드롭다운 버튼
+            _isLoadingApts
+                ? const Center(child: CircularProgressIndicator())
+                : DropdownButtonFormField<String>(
+                    value: _selectedAptNo,
+                    decoration: const InputDecoration(
+                      labelText: '아파트 선택',
+                      border: OutlineInputBorder(),
+                    ),
+                    // 서버에서 받은 _aptList를 바탕으로 메뉴 아이템 생성
+                    items: _aptList.map((apt) {
+                      return DropdownMenuItem<String>(
+                        value: apt['a_no'].toString(), // 실제 DB의 a_no
+                        child: Text(apt['a_name']), // 화면에 보여줄 아파트 이름
+                      );
+                    }).toList(),
+                    onChanged: (value) =>
+                        setState(() => _selectedAptNo = value!),
+                  ),
+
             const SizedBox(height: 10),
+            // ... (나머지 텍스트 필드들은 기존과 동일) ...
             TextField(
               controller: _aptPwdController,
               decoration: const InputDecoration(
@@ -129,7 +176,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            // 👇 여기서부터 새로 추가된 입력 칸들 👇
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(
@@ -152,10 +198,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 labelText: '전화번호 (예: 010-1234-5678)',
                 border: OutlineInputBorder(),
               ),
-              keyboardType: TextInputType.phone, // 숫자 키패드가 뜨도록 설정
+              keyboardType: TextInputType.phone,
             ),
             const SizedBox(height: 10),
-            // 👆 여기까지 새로 추가됨 👆
             TextField(
               controller: _idController,
               decoration: const InputDecoration(

@@ -91,7 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 12),
 
-          // 2. 내 차량 관리 (vehicles 테이블 데이터 연동)
+          // 2. 내 차량 관리
           _buildSectionTitle('내 등록 차량 관리'),
           _buildVehicleItem(
             icon: Icons.directions_car_filled,
@@ -166,10 +166,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showVersionInfo() {
     showAboutDialog(
       context: context,
-      applicationName: '스마트 주차 관제',
+      applicationName: 'Park On',
       applicationVersion: '1.0.0',
       applicationIcon: const Icon(Icons.apartment_rounded, size: 50),
-      children: [const Text('본 서비스는 명학아파트 입주민 전용 스마트 주차 시스템입니다.')],
+      children: [const Text('본 서비스는 입주민 전용 스마트 주차 시스템입니다.')],
     );
   }
 
