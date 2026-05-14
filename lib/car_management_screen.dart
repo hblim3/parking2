@@ -120,7 +120,42 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
       print("차량 등록 실패: $e");
     }
   }
+  // ... 기존 _addCar 함수 끝나는 부분 ...
 
+  // 💡 [추가] 4. 서버에 차량 삭제 요청하기
+  Future<void> _deleteCar(String carNumber) async {
+    const storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'jwt_token');
+
+    if (token == null) return;
+
+    // REST API 방식: 주소 끝에 삭제할 차량 번호를 붙여서 전송합니다.
+    final url = Uri.parse('$baseUrl/api/cars/$carNumber');
+
+    try {
+      final response = await http.delete(
+        url,
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      if (response.statusCode == 200) {
+        _fetchCars(); // 💡 삭제 성공 시 목록을 다시 불러와 화면 새로고침!
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('차량이 성공적으로 삭제되었습니다.')));
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('차량 삭제 실패')));
+      }
+    } catch (e) {
+      print("차량 삭제 통신 에러: $e");
+    }
+  }
+
+  // ... 기존 _showAddCarDialog 함수 시작 부분 ...
   // 3. 차량 추가 팝업
   void _showAddCarDialog() {
     final TextEditingController numberController = TextEditingController();
@@ -211,7 +246,7 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
     );
   }
 
-  // 💡 탭 내부의 리스트를 그려주는 공통 함수
+  // 💡 탭 내부의 리스트를 그려주는 공통 함수 (삭제 버튼 추가 완료!)
   Widget _buildCarList(List<dynamic> cars, bool isVisitor) {
     if (cars.isEmpty) {
       return Center(
@@ -226,6 +261,8 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
       itemCount: cars.length,
       itemBuilder: (context, index) {
         final car = cars[index];
+        final String currentCarNumber = car['c_number'] ?? '번호 없음'; // 차량 번호 변수화
+
         return Card(
           elevation: 0,
           margin: const EdgeInsets.only(bottom: 12),
@@ -248,7 +285,7 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
               ),
             ),
             title: Text(
-              car['c_number'] ?? '번호 없음',
+              currentCarNumber,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
             subtitle: Padding(
@@ -277,6 +314,45 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
                     ),
                 ],
               ),
+            ),
+            // 👇 여기에 휴지통(삭제) 버튼이 새롭게 추가되었습니다!
+            trailing: IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              onPressed: () {
+                // 실수로 지우는 걸 방지하기 위한 확인 팝업창
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text(
+                      '차량 삭제',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    content: Text('[$currentCarNumber] 차량을 목록에서 삭제하시겠습니까?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text(
+                          '취소',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx); // 팝업 닫기
+                          _deleteCar(currentCarNumber); // 💡 서버로 삭제 통신 시작!
+                        },
+                        child: const Text(
+                          '삭제',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         );

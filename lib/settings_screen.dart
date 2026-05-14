@@ -67,7 +67,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     }
   }
-  // 👆 여기까지 추가 👆
+  // ... 기존 _fetchUserProfile 함수 끝나는 부분 ...
+
+  // 💡 [추가] 1. 푸시 알림 설정 서버에 저장하기
+  Future<void> _updateNotificationSetting(bool value) async {
+    const storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'jwt_token');
+    if (token == null) return;
+
+    final url = Uri.parse('$baseUrl/api/settings/push');
+    try {
+      await http.patch(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({"alert_push": value ? 1 : 0}), // true면 1, false면 0 전송
+      );
+    } catch (e) {
+      print("알림 설정 동기화 실패: $e");
+    }
+  }
+
+  // 💡 [추가] 2. 다크 모드 설정 서버에 저장하기
+  Future<void> _updateThemeSetting(bool isDark) async {
+    const storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'jwt_token');
+    if (token == null) return;
+
+    final url = Uri.parse('$baseUrl/api/settings/theme');
+    try {
+      await http.patch(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({"theme_mode": isDark ? 'dark' : 'light'}), //
+      );
+    } catch (e) {
+      print("테마 설정 동기화 실패: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,25 +150,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           const SizedBox(height: 12),
-
-          // 3. 앱 설정 (settings 테이블: alert_push, is_dark_mode)
+          // 3. 앱 설정 섹션 수정
           _buildSectionTitle('앱 설정'),
           _buildSwitchItem(
             icon: Icons.notifications_active_outlined,
             title: '푸시 알림 수신',
             value: _isPushAlarmOn,
-            onChanged: (val) => setState(() => _isPushAlarmOn = val),
+            onChanged: (val) {
+              setState(() => _isPushAlarmOn = val); // 화면 즉시 변경
+              _updateNotificationSetting(val); // 💡 서버 DB에 저장!
+            },
           ),
           _buildSwitchItem(
             icon: Icons.dark_mode_outlined,
             title: '다크 모드',
             value: isDark,
             onChanged: (bool value) {
-              // 💡 회원님의 themeNotifier 로직 적용!
               themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
+              _updateThemeSetting(value); // 💡 서버 DB에 저장!
             },
           ),
-
           const SizedBox(height: 12),
 
           // 4. 고객 지원 및 계정

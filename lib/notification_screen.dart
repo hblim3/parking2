@@ -67,7 +67,35 @@ class _NotificationScreenState extends State<NotificationScreen> {
       }
     }
   }
+  // ... 기존 _fetchNotifications 함수 끝나는 부분 ...
 
+  // 💡 [추가] 서버에 알림 읽음 처리(is_read = 1) 요청하기
+  Future<void> _markAsRead(int notiNo) async {
+    const storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'jwt_token');
+
+    if (token == null) return;
+
+    // REST API: 어떤 알림을 읽었는지 번호(notiNo)를 주소에 담아 보냅니다.
+    final url = Uri.parse('$baseUrl/api/notifications/$notiNo/read');
+
+    try {
+      final response = await http.patch(
+        // 상태를 일부 수정(업데이트)할 때는 주로 patch나 put을 씁니다.
+        url,
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      if (response.statusCode == 200) {
+        // 💡 서버에서 읽음 처리가 성공하면, 알림 목록을 다시 불러와서 테두리를 투명하게(읽음 상태) 만듭니다!
+        _fetchNotifications();
+      }
+    } catch (e) {
+      print("알림 읽음 처리 실패: $e");
+    }
+  }
+
+  // ... 기존 _getIconForType 함수 시작 부분 ...
   // 알림 종류에 따라 어울리는 아이콘을 반환하는 함수
   IconData _getIconForType(String type) {
     switch (type) {
@@ -106,12 +134,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 style: TextStyle(fontSize: 16, color: Colors.black54),
               ),
             )
+          // 💡 여기서부터 파일 맨 끝까지 통째로 덮어써주세요!
           : ListView.builder(
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final noti = notifications[index];
 
                 // 💡 서버에서 받아온 데이터 이름표
+                final int notiNo = noti['noti_no'] ?? 0; // 👈 알림 고유 번호(PK)
                 final String type = noti['noti_type'] ?? 'system';
                 final String title = noti['noti_title'] ?? '알림';
                 final String body = noti['noti_message'] ?? '';
@@ -175,14 +205,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       ),
                     ),
                     onTap: () {
+                      // 1. 아직 안 읽은 알림(isRead가 false)일 때만 서버에 읽음 처리 요청을 보냅니다.
+                      if (!isRead && notiNo != 0) {
+                        _markAsRead(notiNo);
+                      }
+
+                      // 2. 알림 터치 시 나오는 팝업
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('해당 화면으로 이동합니다. (준비 중)')),
+                        const SnackBar(content: Text('해당 화면으로 이동합니다.')),
                       );
                     },
                   ),
                 );
-              }, // <-- 아까 지워졌던 괄호 1
-            ), // <-- 아까 지워졌던 괄호 2
-    ); // <-- 아까 지워졌던 괄호 3
+              },
+            ),
+    );
   }
-} // <-- 아까 지워졌던 괄호 4 (클래스 닫기)
+} 
+// 👈 파일의 맨 끝입니다. 이 아래에는 아무것도 없어야 합니다!
