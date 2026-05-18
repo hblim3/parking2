@@ -56,12 +56,8 @@ class _InquiryScreenState extends State<InquiryScreen> {
     }
   }
 
-  // 2. 서버로 새 문의 보내기
-  Future<void> _submitInquiry(
-    String category,
-    String title,
-    String content,
-  ) async {
+  // 2. 서버로 새 문의 보내기 (수정됨)
+  Future<void> _submitInquiry(String title, String content) async {
     const storage = FlutterSecureStorage();
     String? token = await storage.read(key: 'jwt_token');
 
@@ -75,13 +71,12 @@ class _InquiryScreenState extends State<InquiryScreen> {
           "Authorization": "Bearer $token",
         },
         body: jsonEncode({
-          "category": category,
           "title": title,
           "content": content,
+          "c_no": null, // 💡 차량 번호는 선택사항이므로 일단 null로 보냅니다.
         }),
       );
 
-      // 👇 [수정] 서버가 200(성공) 또는 201(생성됨)을 보냈을 때 모두 새로고침 하도록 변경!
       if (response.statusCode == 200 || response.statusCode == 201) {
         _fetchInquiries();
         if (!mounted) return;
@@ -96,127 +91,74 @@ class _InquiryScreenState extends State<InquiryScreen> {
 
   bool isLoading = true; // 로딩 상태 표시
 
-  // 💡 문의 작성 팝업창 띄우기
+  // 💡 문의 작성 팝업창 띄우기 (수정됨)
   void _showWriteDialog() {
     TextEditingController titleController = TextEditingController();
     TextEditingController contentController = TextEditingController();
 
-    // 카테고리 기본값 설정
-    String selectedCategory = '시설보수';
-    final List<String> categories = ['시설보수', '불법주차', '시스템오류', '기타문의'];
-
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        // 팝업창 안에서 드롭다운 상태를 변화시키기 위해 필요
-        builder: (context, setStateDialog) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            title: const Text(
-              '새 문의 접수',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 1. 카테고리 선택 드롭다운 (Spinner)
-                  DropdownButtonFormField<String>(
-                    value: selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: '문의 종류',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                    ),
-                    items: categories.map((String category) {
-                      return DropdownMenuItem(
-                        value: category,
-                        child: Text(category),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setStateDialog(() => selectedCategory = value!);
-                    },
-                  ),
-                  const SizedBox(height: 16),
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text(
+          '새 문의 접수',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 💡 카테고리 선택 부분이 삭제되었습니다.
 
-                  // 2. 제목 입력창
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(
-                      labelText: '제목',
-                      hintText: '간략한 요약을 적어주세요',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 3. 내용 입력창 (여러 줄)
-                  TextField(
-                    controller: contentController,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: '상세 내용',
-                      alignLabelWithHint: true,
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('취소', style: TextStyle(color: Colors.grey)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black87,
+              // 1. 제목 입력창
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  labelText: '제목',
+                  hintText: '간략한 요약을 적어주세요',
+                  border: OutlineInputBorder(),
                 ),
-                onPressed: () {
-                  if (titleController.text.isNotEmpty &&
-                      contentController.text.isNotEmpty) {
-                    // 💡 방금 만든 통신 함수를 실행합니다!
-                    _submitInquiry(
-                      selectedCategory,
-                      titleController.text,
-                      contentController.text,
-                    );
+              ),
+              const SizedBox(height: 16),
 
-                    Navigator.pop(context); // 팝업 닫기
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('문의가 성공적으로 접수되었습니다.')),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('제목과 내용을 모두 입력해주세요.')),
-                    );
-                  }
-                },
-                child: const Text(
-                  '접수하기',
-                  style: TextStyle(color: Colors.white),
+              // 2. 내용 입력창 (여러 줄)
+              TextField(
+                controller: contentController,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: '상세 내용',
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(),
                 ),
               ),
             ],
-          );
-        },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.black87),
+            onPressed: () {
+              if (titleController.text.isNotEmpty &&
+                  contentController.text.isNotEmpty) {
+                // 💡 수정된 통신 함수 호출 (카테고리 제외)
+                _submitInquiry(titleController.text, contentController.text);
+
+                Navigator.pop(context); // 팝업 닫기
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('제목과 내용을 모두 입력해주세요.')),
+                );
+              }
+            },
+            child: const Text('접수하기', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
-  }
-
-  // 상태별 라벨 색상을 정해주는 함수
-  Color _getStatusColor(String status) {
-    if (status == '대기중') return Colors.orange;
-    if (status == '답변완료') return Colors.blue;
-    if (status == '처리완료') return Colors.green;
-    return Colors.grey;
   }
 
   @override
@@ -244,7 +186,30 @@ class _InquiryScreenState extends State<InquiryScreen> {
               itemCount: _inquiries.length,
               itemBuilder: (context, index) {
                 final item = _inquiries[index];
-                final statusColor = _getStatusColor(item['status'] ?? '대기중');
+
+                // 💡 영어 상태값을 한글로 번역합니다.
+                String rawStatus =
+                    item['status']?.toString().toLowerCase() ?? 'pending';
+                String displayStatus = '대기중';
+                Color statusColor = Colors.orange;
+
+                if (rawStatus == 'answered') {
+                  displayStatus = '답변완료';
+                  statusColor = Colors.blue;
+                }
+
+                String createdAt = item['created_at']?.toString() ?? '날짜 정보 없음';
+                if (createdAt.contains('T')) {
+                  try {
+                    DateTime dt = DateTime.parse(
+                      createdAt,
+                    ).toLocal(); // 한국 시간으로 변환
+                    createdAt =
+                        '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                  } catch (e) {
+                    createdAt = '날짜 형식 오류';
+                  }
+                }
 
                 return Card(
                   elevation: 0,
@@ -258,37 +223,17 @@ class _InquiryScreenState extends State<InquiryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 상단: 카테고리 뱃지 & 처리 상태
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[200],
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '[${item['category']}]',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey[800],
-                                ),
-                              ),
+                        // 💡 번역된 상태값만 우측 정렬 표시
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            displayStatus,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
                             ),
-                            Text(
-                              item['status']!,
-                              style: TextStyle(
-                                color: statusColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                         const SizedBox(height: 12),
 
@@ -311,13 +256,14 @@ class _InquiryScreenState extends State<InquiryScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        // 👆 여기까지 추가 완료 👆
-                        if (item['admin_answer'] != null)
+
+                        // 관리자 답변
+                        if (item['answer'] != null)
                           Container(
                             margin: const EdgeInsets.only(top: 12),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.blueGrey[50], // 답변 칸 배경색
+                              color: Colors.blueGrey[50],
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Column(
@@ -332,18 +278,17 @@ class _InquiryScreenState extends State<InquiryScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  item['admin_answer'],
+                                  item['answer'],
                                   style: const TextStyle(fontSize: 14),
                                 ),
                               ],
                             ),
                           ),
+
+                        const SizedBox(height: 12),
                         // 하단: 날짜
                         Text(
-                          // 💡 'created_at'으로 이름을 맞추고, 값이 없을 때를 대비한 안전장치 추가!
-                          item['created_at'] != null
-                              ? item['created_at'].toString()
-                              : '날짜 정보 없음',
+                          createdAt,
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
@@ -354,8 +299,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                   ),
                 );
               },
-            ),
-
+            ), // 💡 꼬였던 괄호가 여기서 안전하게 닫힙니다!
       // 우측 하단 글쓰기 버튼
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showWriteDialog,

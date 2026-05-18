@@ -144,7 +144,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildVehicleItem(
             icon: Icons.add_circle_outline,
             plate: '새 차량 등록',
-            desc: '방문객 차량 및 신규 차량 등록',
+            desc: '', // 💡 글씨를 뺐습니다!
             color: Colors.blueAccent,
             onTap: () => _navigateTo(const CarManagementScreen()),
           ),
@@ -246,6 +246,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // --- UI 컴포넌트들 ---
 
   Widget _buildProfileHeader(bool isDark) {
+    // 💡 동/호수 뒤에 '동'이나 '호' 글자가 안 붙어있으면 자동으로 붙여줍니다!
+    String displayDong = _userDong.endsWith('동') ? _userDong : '$_userDong동';
+    String displayHo = _userHo.endsWith('호') ? _userHo : '$_userHo호';
+
     return Container(
       color: isDark ? Colors.grey[900] : Colors.white,
       padding: const EdgeInsets.all(24),
@@ -268,7 +272,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               Text(
-                '명학아파트 $_userDong $_userHo', // 💡 서버에서 받아온 동/호수로 변경!
+                '명학아파트 $displayDong $displayHo',
                 style: TextStyle(color: Colors.grey[600], fontSize: 13),
               ),
             ],
@@ -304,7 +308,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: ListTile(
         leading: Icon(icon, color: color ?? Colors.black87),
         title: Text(plate, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(desc),
+        // 👇 핵심 수정: desc가 비어있으면('') 아예 공간(subtitle) 자체를 없애버립니다!
+        subtitle: desc.isNotEmpty ? Text(desc) : null,
         trailing: const Icon(Icons.chevron_right, size: 18),
         onTap: onTap,
       ),

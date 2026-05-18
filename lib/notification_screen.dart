@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; // 👈 추가
-import 'dart:convert'; // 👈 추가
-import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 👈 추가
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'main.dart';
 
 class NotificationScreen extends StatefulWidget {
@@ -12,7 +12,6 @@ class NotificationScreen extends StatefulWidget {
 }
 
 class _NotificationScreenState extends State<NotificationScreen> {
-  // 💡 나중에 서버에서 받아올 알림 내역 가짜 데이터 세팅
   List<Map<String, dynamic>> notifications = [];
   bool isLoading = true;
 
@@ -55,48 +54,74 @@ class _NotificationScreenState extends State<NotificationScreen> {
           });
         }
       } else {
-        print("서버 에러 발생: 상태 코드 ${response.statusCode}");
+        throw Exception('서버 응답 오류');
       }
     } catch (e) {
-      print("알림 목록 불러오기 실패 (네트워크 등): $e");
+      print("알림 목록 불러오기 실패 (시연용 Mock 데이터 적용): $e");
+
+      if (!mounted) return;
+      // 💡 [핵심 추가] 서버 연결 실패 시 시연을 위한 가짜 데이터를 띄워줍니다!
+      setState(() {
+        notifications = [
+          {
+            'noti_no': 1,
+            'noti_type': 'system', // 안내 아이콘
+            'noti_title': '🚨 빈자리 알림',
+            'noti_message': '대기 신청하신 [A-5] 구역에 빈자리가 생겼습니다! 다른 입주민보다 먼저 주차하세요.',
+            'is_read': 0, // 0 = 안 읽음 (테두리 및 강조 효과)
+            'created_at': '방금 전',
+          },
+          {
+            'noti_no': 2,
+            'noti_type': 'visitor', // 자동차 아이콘
+            'noti_title': '🅿️ 주차 완료 알림',
+            'noti_message': '[A-2] 구역에 내 차량(12가 3456) 주차가 완료되었습니다.',
+            'is_read': 0,
+            'created_at': '25분 전',
+          },
+        ];
+      });
     } finally {
-      // 💡 핵심 수정: 통신이 성공하든, 404 에러가 나든, 와이파이가 끊기든
-      // 이 로직의 끝에서는 무조건 로딩(isLoading)을 false로 꺼줍니다!
       if (mounted) {
         setState(() => isLoading = false);
       }
     }
   }
-  // ... 기존 _fetchNotifications 함수 끝나는 부분 ...
 
-  // 💡 [추가] 서버에 알림 읽음 처리(is_read = 1) 요청하기
   Future<void> _markAsRead(int notiNo) async {
     const storage = FlutterSecureStorage();
     String? token = await storage.read(key: 'jwt_token');
 
     if (token == null) return;
 
-    // REST API: 어떤 알림을 읽었는지 번호(notiNo)를 주소에 담아 보냅니다.
     final url = Uri.parse('$baseUrl/api/notifications/$notiNo/read');
 
     try {
       final response = await http.patch(
-        // 상태를 일부 수정(업데이트)할 때는 주로 patch나 put을 씁니다.
         url,
         headers: {"Authorization": "Bearer $token"},
       );
 
       if (response.statusCode == 200) {
-        // 💡 서버에서 읽음 처리가 성공하면, 알림 목록을 다시 불러와서 테두리를 투명하게(읽음 상태) 만듭니다!
         _fetchNotifications();
+      } else {
+        throw Exception('서버 에러');
       }
     } catch (e) {
-      print("알림 읽음 처리 실패: $e");
+      print("알림 읽음 처리 통신 실패: $e");
+
+      // 💡 [핵심 추가] 시연 중에 서버가 없더라도, 알림을 터치하면 바로 읽음 처리(회색) 되도록 구현!
+      if (!mounted) return;
+      setState(() {
+        for (var noti in notifications) {
+          if (noti['noti_no'] == notiNo) {
+            noti['is_read'] = 1; // 1이면 읽음 처리되어 테두리가 사라짐
+          }
+        }
+      });
     }
   }
 
-  // ... 기존 _getIconForType 함수 시작 부분 ...
-  // 알림 종류에 따라 어울리는 아이콘을 반환하는 함수
   IconData _getIconForType(String type) {
     switch (type) {
       case 'inquiry':
@@ -113,7 +138,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100], // 아주 연한 회색 배경
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text(
           '알림 내역',
@@ -134,20 +159,27 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 style: TextStyle(fontSize: 16, color: Colors.black54),
               ),
             )
-          // 💡 여기서부터 파일 맨 끝까지 통째로 덮어써주세요!
           : ListView.builder(
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final noti = notifications[index];
 
-                // 💡 서버에서 받아온 데이터 이름표
-                final int notiNo = noti['noti_no'] ?? 0; // 👈 알림 고유 번호(PK)
+                final int notiNo = noti['noti_no'] ?? 0;
                 final String type = noti['noti_type'] ?? 'system';
                 final String title = noti['noti_title'] ?? '알림';
                 final String body = noti['noti_message'] ?? '';
                 final bool isRead = noti['is_read'] == 1;
-                final String time = noti['created_at'] ?? '';
-
+                String time = noti['created_at'] ?? '';
+                // 💡 [시간 변환 코드 추가] T가 포함된 컴퓨터 시간이면 예쁘게 잘라줍니다.
+                if (time.contains('T')) {
+                  DateTime dt = DateTime.parse(
+                    time,
+                  ).toLocal(); // Z(표준시)를 한국 시간으로 변환
+                  // YYYY-MM-DD HH:MM 형태로 조립
+                  time =
+                      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                }
+                // 👆 여기까지 수정/추가 완료 👆
                 return Container(
                   margin: const EdgeInsets.only(bottom: 2),
                   decoration: BoxDecoration(
@@ -205,14 +237,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       ),
                     ),
                     onTap: () {
-                      // 1. 아직 안 읽은 알림(isRead가 false)일 때만 서버에 읽음 처리 요청을 보냅니다.
                       if (!isRead && notiNo != 0) {
                         _markAsRead(notiNo);
                       }
 
-                      // 2. 알림 터치 시 나오는 팝업
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('해당 화면으로 이동합니다.')),
+                        const SnackBar(content: Text('해당 구역의 화면으로 이동합니다.')),
                       );
                     },
                   ),
@@ -221,5 +251,4 @@ class _NotificationScreenState extends State<NotificationScreen> {
             ),
     );
   }
-} 
-// 👈 파일의 맨 끝입니다. 이 아래에는 아무것도 없어야 합니다!
+}

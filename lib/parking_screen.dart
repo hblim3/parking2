@@ -26,7 +26,6 @@ class _ParkingScreenState extends State<ParkingScreen> {
   Future<void> _fetchParkingStatus() async {
     setState(() => isLoading = true);
 
-    // 💡 나중에 서버 컴퓨터(또는 AWS)의 진짜 IP 주소로 바꿔야 합니다!
     final url = Uri.parse('$baseUrl/api/parking-zones');
 
     try {
@@ -38,8 +37,6 @@ class _ParkingScreenState extends State<ParkingScreen> {
         if (!mounted) return;
 
         setState(() {
-          // 💡 서버에서 보내주는 JSON 데이터를 그대로 리스트에 덮어씌웁니다.
-          // (서버 개발자에게 기존 앱 데이터 형식과 똑같이 만들어서 보내달라고 요청하세요!)
           parkingSlots = List<Map<String, dynamic>>.from(data['zones']);
         });
       } else {
@@ -49,7 +46,6 @@ class _ParkingScreenState extends State<ParkingScreen> {
       print("서버 연결 실패 - 시연용 데이터를 표시합니다. 에러: $e");
       if (!mounted) return;
       setState(() {
-        // 💡 통신 실패 시에도 2칸-통로-3칸-통로-2칸이 나오도록 가짜 데이터를 세팅!
         parkingSlots = [
           {
             "floor": "B1",
@@ -121,7 +117,6 @@ class _ParkingScreenState extends State<ParkingScreen> {
     }
   }
 
-  // 💡 알림 신청 팝업창을 띄우는 함수 (핵심 로직)
   void _showNotificationDialog(String target) {
     String title = target == 'ALL' ? '전체 빈자리 알림' : '$target 구역 지정 알림';
     String content = target == 'ALL'
@@ -142,14 +137,11 @@ class _ParkingScreenState extends State<ParkingScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.black87),
             onPressed: () async {
-              Navigator.pop(ctx); // 팝업창 닫기
-
-              // 1. 내 토큰 꺼내오기
+              Navigator.pop(ctx);
               const storage = FlutterSecureStorage();
               String? token = await storage.read(key: 'jwt_token');
               if (token == null) return;
 
-              // 2. 서버로 대기열 신청 보내기 (target: 'ALL' 또는 'A-1')
               final url = Uri.parse('$baseUrl/api/waitlist');
               try {
                 final response = await http.post(
@@ -158,9 +150,7 @@ class _ParkingScreenState extends State<ParkingScreen> {
                     "Content-Type": "application/json",
                     "Authorization": "Bearer $token",
                   },
-                  body: jsonEncode({
-                    "target_slot_id": target, // 'ALL' 또는 특정 구역 이름
-                  }),
+                  body: jsonEncode({"target_slot_id": target}),
                 );
 
                 if (response.statusCode == 200) {
@@ -183,10 +173,7 @@ class _ParkingScreenState extends State<ParkingScreen> {
                 ).showSnackBar(const SnackBar(content: Text('대기 신청에 실패했습니다.')));
               }
             },
-            child: const Text(
-              '신청하기',
-              style: TextStyle(color: Colors.white),
-            ), // 💡 아까 지워졌던 부분 복구!
+            child: const Text('신청하기', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -242,7 +229,6 @@ class _ParkingScreenState extends State<ParkingScreen> {
           ),
         ],
       ),
-      // 💡 1. 전체 알림 신청 플로팅 버튼 추가!
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showNotificationDialog('ALL'),
         backgroundColor: Colors.black87,
@@ -256,141 +242,260 @@ class _ParkingScreenState extends State<ParkingScreen> {
     );
   }
 
+  // 💡 [수정됨] 전체 그릿드를 그리는 함수
+  // 💡 [수정] 전체 그릿드를 그리는 함수
   Widget _buildFloorGrid(String floor) {
-    // 1. 해당 층의 데이터만 필터링
-    final floorSlots = parkingSlots.where((s) => s['floor'] == floor).toList();
+    // 서버가 floor를 안보내줄 수도 있으므로 전체 데이터를 쓰거나 B1만 필터링합니다.
+    final floorSlots = parkingSlots;
 
-    // 2. 💡 핵심: 가로로 스크롤 할 수 있는 도화지를 만듭니다!
+    // 💡 [핵심 수정] DB의 area_number에 '통로'라는 글자가 들어가면 통로로 인식하게 바꿉니다!
+    final slots = floorSlots
+        .where((s) => !(s['area_number']?.toString().contains('통로') ?? false))
+        .toList();
+    final aisles = floorSlots
+        .where((s) => (s['area_number']?.toString().contains('통로') ?? false))
+        .toList();
+
+    List<Widget> topRow = [];
+    List<Widget> bottomRow = [];
+    // ... (이 아래 for문 등 나머지 코드는 기존과 똑같이 유지합니다) ...
+
+    // 2. 주차칸을 지그재그로 1열, 2열에 분배하여 두 줄을 만듭니다.
+    for (int i = 0; i < slots.length; i++) {
+      if (i % 2 == 0) {
+        topRow.add(_buildSlotWidget(slots[i]));
+      } else {
+        bottomRow.add(_buildSlotWidget(slots[i]));
+      }
+    }
+
+    // 💡 3. [핵심 수정] 통로의 길이를 딱 주차칸 2개 너비로 고정합니다!
+    // 계산: 주차칸 가로(100) + 가운데 여백(12) + 주차칸 가로(100) = 212.0
+    double aisleWidth = 212.0;
+
+    // 4. 통로 데이터 할당 (통로1은 위로, 통로2는 아래로)
+    Map<String, dynamic>? topAisle = aisles.isNotEmpty ? aisles.first : null;
+    Map<String, dynamic>? bottomAisle = aisles.length > 1 ? aisles.last : null;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-      child: Row(
-        // 3. 리스트에 있는 순서대로 가로로 쭉 나열합니다.
-        children: floorSlots.map((slotData) {
-          final type = slotData['type'];
+      child: Column(
+        // 통로가 주차칸들의 왼쪽 시작점과 딱 맞아떨어지도록 왼쪽 정렬
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // 👉 상단 통로 (통로 1)
+          if (topAisle != null) _buildAisleWidget(topAisle, aisleWidth),
+          if (topAisle != null) const SizedBox(height: 16),
 
-          if (type == 'blank') {
-            return const SizedBox(width: 20); // 빈 공간일 경우 간격만 띄움
-          }
+          // 👉 윗줄 주차칸 목록
+          Row(children: topRow),
 
-          final isOccupied = slotData['isOccupied'];
-          final slotName = slotData['slot'];
-          final parkedCarNumber = slotData['current_car_number'];
-          final isMyCar =
-              (type == 'slot') &&
-              isOccupied &&
-              (parkedCarNumber == myCarNumber);
+          const SizedBox(height: 12), // 첫 번째 줄과 두 번째 줄 사이 간격
+          // 👉 아랫줄 주차칸 목록
+          Row(children: bottomRow),
 
-          Color boxColor;
-          Color borderColor;
-          IconData slotIcon;
-          String badgeText = '';
+          // 👉 하단 통로 (통로 2)
+          if (bottomAisle != null) const SizedBox(height: 16),
+          if (bottomAisle != null) _buildAisleWidget(bottomAisle, aisleWidth),
+        ],
+      ),
+    );
+  }
 
-          // 🎨 색상 및 아이콘 설정 (기존 로직 동일)
-          if (type == 'aisle') {
-            if (isOccupied) {
-              boxColor = Colors.orange.withOpacity(0.15);
-              borderColor = Colors.orange;
-              slotIcon = Icons.warning_amber_rounded;
-              badgeText = '불법주차';
-            } else {
-              boxColor = Colors.grey.withOpacity(0.05);
-              borderColor = Colors.grey[400]!;
-              slotIcon = Icons.add_road; // 통로 아이콘
-            }
-          } else {
-            if (isMyCar) {
-              boxColor = Colors.blueAccent.withOpacity(0.1);
-              borderColor = Colors.blueAccent;
-              slotIcon = Icons.directions_car;
-              badgeText = '내 차';
-            } else if (isOccupied) {
-              boxColor = Colors.redAccent.withOpacity(0.1);
-              borderColor = Colors.redAccent;
-              slotIcon = Icons.directions_car;
-            } else {
-              boxColor = Colors.green.withOpacity(0.1);
-              borderColor = Colors.green;
-              slotIcon = Icons.local_parking;
-            }
-          }
+  // 💡 [분리됨] 회원님의 "주차칸" 양식 100% 그대로 가져온 위젯
+  // 💡 [수정] 회원님의 "주차칸" 양식 100% 그대로 가져온 위젯
+  Widget _buildSlotWidget(Map<String, dynamic> slotData) {
+    // 💡 DB 상태값(occupied, 사용중 등)을 유연하게 알아듣도록 수정
+    final String status = slotData['status']?.toString().toLowerCase() ?? '';
+    final bool isOccupied =
+        (status == 'occupied' || status == '사용중' || status == 'disabled') ||
+        (slotData['isOccupied'] == true);
 
-          // 💡 4. 한 칸의 디자인과 크기 설정 (가로로 배열되므로 크기 고정)
-          return GestureDetector(
-            onLongPress: () {
-              if (type == 'slot' && isOccupied && !isMyCar) {
-                _showNotificationDialog(slotName);
-              } else if (type == 'aisle' && isOccupied) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('통로 불법주차는 문의게시판을 통해 신고해 주세요.')),
-                );
-              } else if (!isOccupied) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('이미 빈자리입니다! 바로 주차하세요.')),
-                );
-              }
-            },
-            child: Container(
-              // 👉 여기서 한 칸의 가로/세로 크기를 조절할 수 있습니다!
-              width: type == 'aisle' ? 70 : 100, // 통로는 조금 좁게, 주차칸은 넓게
-              height: 140,
-              margin: const EdgeInsets.only(
-                right: 12,
-              ), // 각 칸 사이의 여백 (2,3,2 띄어쓰기)
-              decoration: BoxDecoration(
-                color: boxColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: borderColor,
-                  width: type == 'aisle' && !isOccupied ? 1.5 : 3,
+    // 💡 DB의 area_number를 우선적으로 읽어옵니다.
+    final String slotName =
+        slotData['area_number'] ?? slotData['slot'] ?? '알수없음';
+    final String? parkedCarNumber = slotData['current_car_number'];
+    final bool isMyCar = isOccupied && (parkedCarNumber == myCarNumber);
+
+    // ... (이 아래 Color, Icon 설정 로직은 기존과 똑같이 유지합니다) ...
+    Color boxColor;
+    Color borderColor;
+    IconData slotIcon;
+    String badgeText = '';
+
+    if (isMyCar) {
+      boxColor = Colors.blueAccent.withOpacity(0.1);
+      borderColor = Colors.blueAccent;
+      slotIcon = Icons.directions_car;
+      badgeText = '내 차';
+    } else if (isOccupied) {
+      boxColor = Colors.redAccent.withOpacity(0.1);
+      borderColor = Colors.redAccent;
+      slotIcon = Icons.directions_car;
+    } else {
+      boxColor = Colors.green.withOpacity(0.1);
+      borderColor = Colors.green;
+      slotIcon = Icons.local_parking;
+    }
+
+    return GestureDetector(
+      onLongPress: () {
+        if (isOccupied && !isMyCar) {
+          _showNotificationDialog(slotName);
+        } else if (!isOccupied) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('이미 빈자리입니다! 바로 주차하세요.')));
+        }
+      },
+      child: Container(
+        width: 100, // 회원님 양식 그대로
+        height: 140, // 회원님 양식 그대로
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: boxColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor, width: 3),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  slotName,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: borderColor,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Icon(slotIcon, size: 32, color: borderColor),
+              ],
+            ),
+            if (badgeText.isNotEmpty)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: borderColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        slotName,
-                        style: TextStyle(
-                          fontSize: type == 'aisle' ? 14 : 20,
-                          fontWeight: FontWeight.w900,
-                          color: borderColor,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Icon(slotIcon, size: 32, color: borderColor),
-                    ],
-                  ),
-                  if (badgeText.isNotEmpty)
-                    Positioned(
-                      top: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: borderColor,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          badgeText,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 💡 [수정] 회원님의 "통로" 양식을 가로형으로 살짝 편 위젯
+  Widget _buildAisleWidget(Map<String, dynamic> slotData, double width) {
+    final String status = slotData['status']?.toString().toLowerCase() ?? '';
+    final bool isOccupied =
+        (status == 'occupied' || status == '불법주차') ||
+        (slotData['isOccupied'] == true);
+
+    final String slotName = slotData['area_number'] ?? slotData['slot'] ?? '통로';
+
+    // ... (이 아래 Color, Icon 설정 로직은 기존과 똑같이 유지합니다) ...
+
+    Color boxColor;
+    Color borderColor;
+    IconData slotIcon;
+    String badgeText = '';
+
+    if (isOccupied) {
+      boxColor = Colors.orange.withOpacity(0.15);
+      borderColor = Colors.orange;
+      slotIcon = Icons.warning_amber_rounded;
+      badgeText = '불법주차';
+    } else {
+      boxColor = Colors.grey.withOpacity(0.05);
+      borderColor = Colors.grey[400]!;
+      slotIcon = Icons.add_road; // 통로 아이콘
+    }
+
+    return GestureDetector(
+      onLongPress: () {
+        if (isOccupied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('통로 불법주차는 문의게시판을 통해 신고해 주세요.')),
           );
-        }).toList(),
+        }
+      },
+      child: Container(
+        width: width, // 계산된 전체 주차장 가로 길이만큼 길어짐
+        height: 70, // 가로 통로이므로 높이는 70으로 설정
+        decoration: BoxDecoration(
+          color: boxColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: borderColor,
+            width: isOccupied ? 3 : 1.5, // 기존 디자인 그대로
+          ),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // 세로 기둥(Column) 대신 가로 기둥(Row)으로 눕혔습니다
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(slotIcon, size: 28, color: borderColor),
+                const SizedBox(width: 10),
+                Text(
+                  slotName,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: borderColor,
+                  ),
+                ),
+              ],
+            ),
+            if (badgeText.isNotEmpty)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: borderColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

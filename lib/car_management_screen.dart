@@ -129,8 +129,10 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
 
     if (token == null) return;
 
-    // REST API 방식: 주소 끝에 삭제할 차량 번호를 붙여서 전송합니다.
-    final url = Uri.parse('$baseUrl/api/cars/$carNumber');
+    // 💡 차량 번호의 한글과 띄어쓰기를 컴퓨터가 읽을 수 있는 주소 형식으로 변환합니다.
+    final url = Uri.parse(
+      '$baseUrl/api/cars/${Uri.encodeComponent(carNumber)}',
+    );
 
     try {
       final response = await http.delete(
@@ -261,7 +263,25 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
       itemCount: cars.length,
       itemBuilder: (context, index) {
         final car = cars[index];
-        final String currentCarNumber = car['c_number'] ?? '번호 없음'; // 차량 번호 변수화
+        final String currentCarNumber = car['c_number'] ?? '번호 없음';
+
+        // 💡 [수정 1] 차량 이름(모델명) 처리 - 비어있으면 알맞은 글씨로 채워줍니다!
+        String carName = car['c_name']?.toString() ?? '';
+        if (carName.isEmpty) {
+          carName = isVisitor ? '방문객 차량' : '입주민 등록 차량';
+        }
+
+        // 💡 [수정 2] 만료 시간(T, Z 포함)을 한국 시간으로 예쁘게 포맷팅!
+        String expireDate = car['expire_date']?.toString() ?? '';
+        if (expireDate.contains('T')) {
+          try {
+            DateTime dt = DateTime.parse(expireDate).toLocal();
+            expireDate =
+                '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+          } catch (e) {
+            // 변환 에러 시 원본 유지
+          }
+        }
 
         return Card(
           elevation: 0,
@@ -293,19 +313,18 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    car['c_name'] ?? '',
-                    style: const TextStyle(color: Colors.black87),
-                  ),
+                  // 👇 빈칸 대신 위에서 만든 carName('방문객 차량')이 들어갑니다.
+                  Text(carName, style: const TextStyle(color: Colors.black87)),
                   if (car['c_note'] != null &&
                       car['c_note'].toString().isNotEmpty)
                     Text(
                       '비고: ${car['c_note']}',
                       style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
-                  if (isVisitor && car['expire_date'] != null)
+                  // 👇 지저분한 시간 대신 위에서 변환한 예쁜 expireDate가 들어갑니다.
+                  if (isVisitor && expireDate.isNotEmpty)
                     Text(
-                      '만료: ${car['expire_date']}',
+                      '만료: $expireDate',
                       style: const TextStyle(
                         color: Colors.redAccent,
                         fontSize: 12,
@@ -315,11 +334,10 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
                 ],
               ),
             ),
-            // 👇 여기에 휴지통(삭제) 버튼이 새롭게 추가되었습니다!
+            // 휴지통(삭제) 버튼
             trailing: IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
               onPressed: () {
-                // 실수로 지우는 걸 방지하기 위한 확인 팝업창
                 showDialog(
                   context: context,
                   builder: (ctx) => AlertDialog(
@@ -341,8 +359,8 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
                           backgroundColor: Colors.redAccent,
                         ),
                         onPressed: () {
-                          Navigator.pop(ctx); // 팝업 닫기
-                          _deleteCar(currentCarNumber); // 💡 서버로 삭제 통신 시작!
+                          Navigator.pop(ctx);
+                          _deleteCar(currentCarNumber);
                         },
                         child: const Text(
                           '삭제',
