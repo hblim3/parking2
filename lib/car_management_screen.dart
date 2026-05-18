@@ -271,16 +271,25 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
           carName = isVisitor ? '방문객 차량' : '입주민 등록 차량';
         }
 
-        // 💡 [수정 2] 만료 시간(T, Z 포함)을 한국 시간으로 예쁘게 포맷팅!
+        // 💡 [수정] 만료 시간 표시 로직
         String expireDate = car['expire_date']?.toString() ?? '';
-        if (expireDate.contains('T')) {
-          try {
-            DateTime dt = DateTime.parse(expireDate).toLocal();
-            expireDate =
-                '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-          } catch (e) {
-            // 변환 에러 시 원본 유지
+        String displayTimeText = '';
+        Color timeColor = Colors.redAccent;
+
+        if (expireDate.isEmpty || expireDate == 'null') {
+          // 아직 입차하지 않아서 만료 시간이 NULL인 경우
+          displayTimeText = '⏳ 입차 대기 중 (입차 시 24시간 시작)';
+          timeColor = Colors.orange; // 대기 중은 오렌지색
+        } else {
+          // 입차해서 만료 시간이 계산된 경우
+          if (expireDate.contains('T')) {
+            try {
+              DateTime dt = DateTime.parse(expireDate).toLocal();
+              expireDate =
+                  '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+            } catch (e) {}
           }
+          displayTimeText = '만료: $expireDate';
         }
 
         return Card(
@@ -322,11 +331,11 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
                       style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                   // 👇 지저분한 시간 대신 위에서 변환한 예쁜 expireDate가 들어갑니다.
-                  if (isVisitor && expireDate.isNotEmpty)
+                  if (isVisitor)
                     Text(
-                      '만료: $expireDate',
-                      style: const TextStyle(
-                        color: Colors.redAccent,
+                      displayTimeText,
+                      style: TextStyle(
+                        color: timeColor,
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
@@ -334,7 +343,6 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
                 ],
               ),
             ),
-            // 휴지통(삭제) 버튼
             trailing: IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
               onPressed: () {

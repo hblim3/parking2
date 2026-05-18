@@ -145,20 +145,21 @@ app.get('/api/cars', authenticateToken, (req, res) => {
     });
 });
 
-// 🚀 차량 등록 (입주민/방문객 구분해서 다른 테이블에 넣기)
+// 💡 [수정] 차량 등록 (입주민/방문객 구분해서 다른 테이블에 넣기)
 app.post('/api/cars', authenticateToken, (req, res) => {
     const { c_number, c_name, car_type, c_note } = req.body;
     const u_no = req.user.userId;
 
     if (car_type === '방문객') {
-        // 방문객은 registered_cars 테이블로! (만료시간은 지금으로부터 24시간 뒤로 자동 계산)
-        const query = `INSERT INTO registered_cars (u_no, c_number, expire_date) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 1 DAY))`;
+        // 💡 핵심 수정: 만료시간을 미리 계산하지 않고, 차량 번호만 넣습니다!
+        // reg_time은 DB가 알아서 지금 시간으로 채우고, park_time과 expire_date는 NULL로 둡니다.
+        const query = `INSERT INTO registered_cars (u_no, c_number) VALUES (?, ?)`;
         db.query(query, [u_no, c_number], (err) => {
             if (err) return res.status(500).json({ success: false, message: '방문객 등록 에러' });
             res.json({ success: true });
         });
     } else {
-        // 입주민은 기존 car 테이블로!
+        // 입주민 로직은 기존과 동일... (생략)
         const query = `INSERT INTO car (u_no, c_number, c_name, c_kind, c_note, c_date) VALUES (?, ?, ?, '입주민', ?, NOW())`;
         db.query(query, [u_no, c_number, c_name, c_note], (err) => {
             if (err) return res.status(500).json({ success: false, message: '입주민 등록 에러' });
@@ -337,6 +338,29 @@ app.patch('/api/settings/theme', authenticateToken, (req, res) => {
     db.query(query, [tempDeviceId, theme_mode, theme_mode], (err) => {
         if (err) return res.status(500).json({ success: false });
         res.json({ success: true });
+    });
+});
+
+// 🚀 [신규] 하드웨어(카메라)가 방문 차량 입차를 인식했을 때 호출하는 API
+app.post('/api/visitor-entry', (req, res) => {
+    const { c_number } = req.body; // 카메라가 인식한 차량 번호
+
+    // 💡 방금 들어온 차의 주차 시간을 지금(NOW)으로 찍고, 만료 시간을 24시간 뒤로 설정합니다!
+    const query = `
+        UPDATE registered_cars 
+        SET park_time = NOW(), expire_date = DATE_ADD(NOW(), INTERVAL 1 DAY) 
+        WHERE c_number = ? AND park_time IS NULL
+    `;
+    
+    db.query(query, [c_number], (err, result) => {
+        if (err) return res.status(500).json({ success: false, message: 'DB 업데이트 실패' });
+        
+        if (result.affectedRows > 0) {
+            console.log(`✅ 방문객 차량 [${c_number}] 실제 입차 완료! 타이머 시작`);
+            res.json({ success: true, message: '입차 처리 및 타이머 시작 완료' });
+        } else {
+            res.status(404).json({ success: false, message: '등록되지 않은 방문객 차량이거나 이미 주차 중입니다.' });
+        }
     });
 });
 app.listen(3000, () => console.log('🚀 통합 서버 실행 중: http://localhost:3000'));
