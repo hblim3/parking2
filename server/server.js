@@ -123,13 +123,26 @@ app.get('/api/user-info', authenticateToken, (req, res) => {
 // 2. 차량 관리 API (분리된 DB 테이블 완벽 적용 버전)
 // ---------------------------------------------------------
 
-// 🚀 차량 목록 조회 (입주민 + 방문객 따로 챙겨서 보내기)
+// 🚀 차량 목록 조회 (입주민 + 방문객 따로 챙겨서 보내기) - 동적 이름 반영 버전
 app.get('/api/cars', authenticateToken, (req, res) => {
     const u_no = req.user.userId;
 
-    // 1. 입주민 차량 조회
-    db.query('SELECT * FROM car WHERE u_no = ?', [u_no], (err, residentResults) => {
-        if (err) return res.status(500).json({ success: false });
+    // 💡 1. 입주민 차량 조회 쿼리 수정
+    // c_name이 NULL이면 user 테이블의 u_name을 가져와 'OOO의 차량'으로 만들고, 값이 있으면 그 값을 그대로 씁니다.
+    const residentQuery = `
+        SELECT 
+            c.c_no, c.c_number, c.c_kind, c.c_note, c.c_date, c.u_no,
+            IFNULL(c.c_name, CONCAT(u.u_name, '의 차량')) AS c_name
+        FROM car c
+        JOIN user u ON c.u_no = u.u_no
+        WHERE c.u_no = ?
+    `;
+
+    db.query(residentQuery, [u_no], (err, residentResults) => {
+        if (err) {
+            console.error("❌ 입주민 차량 조회 에러:", err);
+            return res.status(500).json({ success: false });
+        }
 
         // 2. 방문객 차량 조회
         db.query('SELECT * FROM registered_cars WHERE u_no = ?', [u_no], (err, visitorResults) => {
@@ -144,27 +157,29 @@ app.get('/api/cars', authenticateToken, (req, res) => {
         });
     });
 });
-
 // 💡 [수정] 차량 등록 (입주민/방문객 구분해서 다른 테이블에 넣기)
 app.post('/api/cars', authenticateToken, (req, res) => {
     const { c_number, c_name, car_type, c_note } = req.body;
     const u_no = req.user.userId;
 
     if (car_type === '방문객') {
-        // 💡 핵심 수정: 만료시간을 미리 계산하지 않고, 차량 번호만 넣습니다!
-        // reg_time은 DB가 알아서 지금 시간으로 채우고, park_time과 expire_date는 NULL로 둡니다.
         const query = `INSERT INTO registered_cars (u_no, c_number) VALUES (?, ?)`;
         db.query(query, [u_no, c_number], (err) => {
             if (err) return res.status(500).json({ success: false, message: '방문객 등록 에러' });
             res.json({ success: true });
         });
     } else {
-        // 입주민 로직은 기존과 동일... (생략)
-        const query = `INSERT INTO car (u_no, c_number, c_name, c_kind, c_note, c_date) VALUES (?, ?, ?, '입주민', ?, NOW())`;
-        db.query(query, [u_no, c_number, c_name, c_note], (err) => {
-            if (err) return res.status(500).json({ success: false, message: '입주민 등록 에러' });
-            res.json({ success: true });
-        });
+        // 👇 핵심 수정: 입주민 차량 로직 변경
+        // 1. 앱에서 보낸 c_name(예: '투싼')을 DB의 c_kind 자리에 매칭시킵니다.
+        // 2. DB의 c_name 자리에는 서브쿼리를 사용해 DB가 스스로 "OOO의 차량"이라고 만들어 넣도록 지시합니다.
+// [server.js] app.post('/api/cars', ...) 내부 입주민 로직
+const query = `INSERT INTO car (u_no, c_number, c_name, c_kind, c_note, c_date) VALUES (?, ?, ?, ?, ?, NOW())`;
+
+// 💡 앱에서 전달받은 c_name이 비어있으면 null을 넣도록 처리 (c_name 자리 주의)
+db.query(query, [u_no, c_number, c_name || null, c_kind, c_note], (err) => {
+    if (err) return res.status(500).json({ success: false, message: '입주민 등록 에러' });
+    res.json({ success: true });
+});
     }
 });
 // 🚗 차량 삭제 API (입주민/방문객 통합)
@@ -363,4 +378,25 @@ app.post('/api/visitor-entry', (req, res) => {
         }
     });
 });
+// 👇👇 [여기에 새로 추가!] 하드웨어(카메라)가 주차 상태 변경(선 넘음 등)을 감지했을 때 호출하는 API 👇👇
+app.post('/api/parking-update', (req, res) => {
+    // 하드웨어가 배열로 [{'slot': 'A-1', 'status': 'error'}, {'slot': 'A-2', 'status': 'error'}] 보낸다고 가정
+    const updates = req.body.updates; 
+
+    // 받은 데이터가 없으면 종료
+    if (!updates || !Array.isArray(updates)) {
+        return res.status(400).json({ success: false, message: '데이터 형식이 잘못되었습니다.' });
+    }
+
+    updates.forEach(data => {
+        // DB의 parking_zone 테이블 상태를 업데이트! (error, empty, occupied 등)
+        const query = 'UPDATE parking_zone SET status = ? WHERE area_number = ?';
+        db.query(query, [data.status, data.slot], (err) => {
+            if (err) console.error(`❌ DB 업데이트 에러 (${data.slot}):`, err);
+        });
+    });
+
+    res.json({ success: true, message: '주차장 상태 업데이트 완료' });
+});
+// 👆👆 여기까지 추가 👆👆
 app.listen(3000, () => console.log('🚀 통합 서버 실행 중: http://localhost:3000'));

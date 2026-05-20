@@ -305,27 +305,35 @@ class _ParkingScreenState extends State<ParkingScreen> {
   }
 
   // 💡 [분리됨] 회원님의 "주차칸" 양식 100% 그대로 가져온 위젯
-  // 💡 [수정] 회원님의 "주차칸" 양식 100% 그대로 가져온 위젯
+  // 💡 [수정] 일반 주차칸 위젯 생성 함수
   Widget _buildSlotWidget(Map<String, dynamic> slotData) {
-    // 💡 DB 상태값(occupied, 사용중 등)을 유연하게 알아듣도록 수정
     final String status = slotData['status']?.toString().toLowerCase() ?? '';
+
+    // 💡 [핵심 1] DB에서 날아온 상태가 '에러'나 '불법주차'인지 확인하는 변수 추가!
+    final bool isError =
+        (status == 'error' || status == '불법주차' || status == '선넘음');
+
     final bool isOccupied =
         (status == 'occupied' || status == '사용중' || status == 'disabled') ||
         (slotData['isOccupied'] == true);
 
-    // 💡 DB의 area_number를 우선적으로 읽어옵니다.
     final String slotName =
         slotData['area_number'] ?? slotData['slot'] ?? '알수없음';
     final String? parkedCarNumber = slotData['current_car_number'];
     final bool isMyCar = isOccupied && (parkedCarNumber == myCarNumber);
 
-    // ... (이 아래 Color, Icon 설정 로직은 기존과 똑같이 유지합니다) ...
     Color boxColor;
     Color borderColor;
     IconData slotIcon;
     String badgeText = '';
 
-    if (isMyCar) {
+    // 💡 [핵심 2] 조건문에 isError를 가장 먼저 확인하여 경고창 띄우기!
+    if (isError) {
+      boxColor = Colors.orange.withOpacity(0.15); // 주황색 경고 배경
+      borderColor = Colors.orange; // 주황색 테두리
+      slotIcon = Icons.warning_amber_rounded; // 경고 아이콘!
+      badgeText = '주차선 위반';
+    } else if (isMyCar) {
       boxColor = Colors.blueAccent.withOpacity(0.1);
       borderColor = Colors.blueAccent;
       slotIcon = Icons.directions_car;
@@ -339,7 +347,6 @@ class _ParkingScreenState extends State<ParkingScreen> {
       borderColor = Colors.green;
       slotIcon = Icons.local_parking;
     }
-
     return GestureDetector(
       onLongPress: () {
         if (isOccupied && !isMyCar) {
