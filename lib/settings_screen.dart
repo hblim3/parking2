@@ -23,11 +23,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _userName = "로딩 중...";
   String _userDong = "";
   String _userHo = "";
+  String _myCarPlate = "등록 차량 없음";
+  String _myCarModel = "차량을 등록해주세요";
 
   @override
   void initState() {
     super.initState();
     _fetchUserProfile(); // 화면이 켜질 때 내 정보 불러오기!
+    _fetchMyCarInfo();
   }
 
   Future<void> _fetchUserProfile() async {
@@ -67,7 +70,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     }
   }
-  // ... 기존 _fetchUserProfile 함수 끝나는 부분 ...
+
+  Future<void> _fetchMyCarInfo() async {
+    const storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'jwt_token');
+    if (token == null) return;
+
+    final url = Uri.parse('$baseUrl/api/cars');
+    try {
+      final response = await http.get(
+        url,
+        headers: {"Authorization": "Bearer $token"},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true &&
+            data['resident_cars'] != null &&
+            data['resident_cars'].isNotEmpty) {
+          if (!mounted) return;
+          setState(() {
+            _myCarPlate = data['resident_cars'][0]['c_number'];
+            _myCarModel = data['resident_cars'][0]['c_kind'] ?? '내 차량';
+          });
+        }
+      }
+    } catch (e) {
+      print("설정창 차량 조회 실패: $e");
+    }
+  }
 
   // 💡 [추가] 1. 푸시 알림 설정 서버에 저장하기
   Future<void> _updateNotificationSetting(bool value) async {
@@ -137,8 +167,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionTitle('내 등록 차량 관리'),
           _buildVehicleItem(
             icon: Icons.directions_car_filled,
-            plate: '12가 3456',
-            desc: '제네시스 (입주민)',
+            plate: _myCarPlate, // 👈 고정된 글자 대신 변수로 변경!
+            desc: _myCarModel, // 👈 고정된 글자 대신 변수로 변경!
             onTap: () => _navigateTo(const CarManagementScreen()),
           ),
           _buildVehicleItem(

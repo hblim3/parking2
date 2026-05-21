@@ -12,7 +12,7 @@ class ParkingScreen extends StatefulWidget {
 }
 
 class _ParkingScreenState extends State<ParkingScreen> {
-  final String myCarNumber = "12가 3456";
+  String? myCarNumber; // 💡 고정된 번호를 지우고, 실시간으로 받아올 공간으로 변경
 
   List<Map<String, dynamic>> parkingSlots = [];
   bool isLoading = true;
@@ -20,10 +20,54 @@ class _ParkingScreenState extends State<ParkingScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchParkingStatus();
+    _initializeParkingData(); // 💡 [3단계] 초기화 함수 호출로 변경된 상태
+  }
+
+  // 💡 [3단계에서 쓰일 초기화 함수]
+  Future<void> _initializeParkingData() async {
+    await _fetchMyCarNumber();
+    await _fetchParkingStatus();
+  }
+
+  // ====================================================================
+  // 👇여기에 [2단계] 코드를 통째로 복사해서 붙여넣으세요!👇
+  // ====================================================================
+  Future<void> _fetchMyCarNumber() async {
+    const storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'jwt_token');
+
+    if (token == null) return;
+
+    final url = Uri.parse('$baseUrl/api/cars');
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true &&
+            data['resident_cars'] != null &&
+            data['resident_cars'].isNotEmpty) {
+          setState(() {
+            myCarNumber = data['resident_cars'][0]['c_number'];
+          });
+        }
+      }
+    } catch (e) {
+      print("내 차량 정보 동적 로딩 실패 (시연용 기본값 유지): $e");
+      myCarNumber = "12가 3456";
+    }
   }
 
   Future<void> _fetchParkingStatus() async {
+    // 💡 화면이 아직 화면 트리에 붙어있는지(살아있는지) 확인!
+    // 이미 넘어간 상태라면 이 함수를 조용히 종료(return)시킵니다.
+    if (!mounted) return;
     setState(() => isLoading = true);
 
     final url = Uri.parse('$baseUrl/api/parking-zones');

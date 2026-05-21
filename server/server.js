@@ -169,17 +169,16 @@ app.post('/api/cars', authenticateToken, (req, res) => {
             res.json({ success: true });
         });
     } else {
-        // 👇 핵심 수정: 입주민 차량 로직 변경
-        // 1. 앱에서 보낸 c_name(예: '투싼')을 DB의 c_kind 자리에 매칭시킵니다.
-        // 2. DB의 c_name 자리에는 서브쿼리를 사용해 DB가 스스로 "OOO의 차량"이라고 만들어 넣도록 지시합니다.
-// [server.js] app.post('/api/cars', ...) 내부 입주민 로직
-const query = `INSERT INTO car (u_no, c_number, c_name, c_kind, c_note, c_date) VALUES (?, ?, ?, ?, ?, NOW())`;
+        // 💡 핵심 수정: 앱에서 보낸 모델명(c_name)을 DB의 c_kind에 넣고, DB의 c_name은 동적 렌더링을 위해 NULL로 비웁니다.
+        const query = `INSERT INTO car (u_no, c_number, c_name, c_kind, c_note, c_date) VALUES (?, ?, NULL, ?, ?, NOW())`;
 
-// 💡 앱에서 전달받은 c_name이 비어있으면 null을 넣도록 처리 (c_name 자리 주의)
-db.query(query, [u_no, c_number, c_name || null, c_kind, c_note], (err) => {
-    if (err) return res.status(500).json({ success: false, message: '입주민 등록 에러' });
-    res.json({ success: true });
-});
+        db.query(query, [u_no, c_number, c_name, c_note], (err) => {
+            if (err) {
+                console.error("❌ 입주민 등록 에러:", err);
+                return res.status(500).json({ success: false, message: '입주민 등록 에러' });
+            }
+            res.json({ success: true });
+        });
     }
 });
 // 🚗 차량 삭제 API (입주민/방문객 통합)
