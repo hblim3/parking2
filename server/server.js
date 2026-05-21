@@ -371,6 +371,22 @@ app.post('/api/visitor-entry', (req, res) => {
         
         if (result.affectedRows > 0) {
             console.log(`✅ 방문객 차량 [${c_number}] 실제 입차 완료! 타이머 시작`);
+            // ==============================================================
+            // 💡 [여기에 추가!] 2. 입주민에게 방문객 도착 알림 DB 생성하기
+            // ==============================================================
+            const notiQuery = `
+                INSERT INTO notifications (u_no, noti_type, noti_title, noti_message)
+                SELECT u_no, 'visitor', '🅿️ 방문객 입차 알림', CONCAT('[', ?, '] 방문객 차량이 주차장에 들어왔습니다.')
+                FROM registered_cars
+                WHERE c_number = ?
+                LIMIT 1
+            `;
+            // 방금 들어온 차 번호를 이용해 차주(초대한 입주민)를 찾아서 알림을 꽂아줍니다!
+            db.query(notiQuery, [c_number, c_number], (notiErr) => {
+                if (notiErr) console.error("❌ 알림 DB 생성 실패:", notiErr);
+                else console.log("✅ 방문객 입차 알림 DB 저장 완료!");
+            });
+            // ==============================================================
             res.json({ success: true, message: '입차 처리 및 타이머 시작 완료' });
         } else {
             res.status(404).json({ success: false, message: '등록되지 않은 방문객 차량이거나 이미 주차 중입니다.' });
