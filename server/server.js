@@ -12,10 +12,10 @@ const JWT_SECRET = 'my_super_secret_parking_key_2026!';
 
 // 🗄️ DB 연결 정보 수정
 const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: 'shf3717!', 
-    database: 'parking_db' // 👈 'datasample'에서 다시 'parking_db'로 변경!
+    host: 'graduation.cpoma4qy004x.ap-southeast-2.rds.amazonaws.com',
+    user: 'admin',
+    password: 'dlxogud12!', 
+    database: 'datasample' // 👈 'datasample'에서 다시 'parking_db'로 변경!
 });
 
 db.connect(err => {
@@ -76,19 +76,38 @@ app.post('/api/login', (req, res) => {
         }
     });
 });
-// 🚀 회원가입
+// 🚀 회원가입 API 수정 (a_pwd 검증 로직 추가)
 app.post('/api/signup', async (req, res) => {
-    const { u_id, u_pwd, u_name, u_email, u_phone, u_dong, u_ho, a_no } = req.body;
+    // 👇 요청 바디에서 a_pwd를 함께 구조분해 할당으로 가져옵니다.
+    const { u_id, u_pwd, u_name, u_email, u_phone, u_dong, u_ho, a_no, a_pwd } = req.body;
+    
     try {
-        const hashedPwd = await bcrypt.hash(u_pwd, 10);
-        const query = `INSERT INTO user (u_id, u_pwd, u_name, u_email, u_phone, u_dong, u_ho, a_no, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'APPROVED')`;
-        db.query(query, [u_id, hashedPwd, u_name, u_email, u_phone, u_dong, u_ho, a_no], (err) => {
-            if (err) return res.status(500).json({ success: false, message: '중복 가입' });
-            res.json({ success: true });
-        });
-    } catch (e) { res.status(500).json({ success: false }); }
-});
+        // 1단계: 먼저 해당 아파트의 공용 비밀번호가 일치하는지 쿼리로 확인합니다.
+        const aptCheckQuery = 'SELECT * FROM apartments WHERE a_no = ? AND a_pwd = ?';
+        db.query(aptCheckQuery, [a_no, a_pwd], async (aptErr, aptResults) => {
+            if (aptErr) return res.status(500).json({ success: false, message: '서버 에러' });
+            
+            // 비밀번호가 틀렸거나 해당하는 아파트가 없는 경우 가입 차단
+            if (aptResults.length === 0) {
+                return res.status(401).json({ success: false, message: '아파트 공용 비밀번호가 일치하지 않습니다.' });
+            }
 
+            // 2단계: 비밀번호가 일치하면 기존 회원가입 로직(비번 암호화 및 인서트) 수행
+            const hashedPwd = await bcrypt.hash(u_pwd, 10);
+            const insertUserQuery = `
+                INSERT INTO user (u_id, u_pwd, u_name, u_email, u_phone, u_dong, u_ho, a_no, approval_status) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'APPROVED')
+            `;
+            
+            db.query(insertUserQuery, [u_id, hashedPwd, u_name, u_email, u_phone, u_dong, u_ho, a_no], (err) => {
+                if (err) return res.status(500).json({ success: false, message: '이미 존재하는 아이디입니다.' });
+                res.json({ success: true });
+            });
+        });
+    } catch (e) { 
+        res.status(500).json({ success: false }); 
+    }
+});
 // 🚀 아이디 찾기
 app.post('/api/find-id', (req, res) => {
     const { u_dong, u_ho, apt_pwd } = req.body;
@@ -264,16 +283,16 @@ app.post('/api/inquiries', authenticateToken, (req, res) => {
     const { title, content, c_no } = req.body; 
     
     // 💡 resident_inquiry 테이블에 status 기본값을 'pending'으로 넣습니다.
-    const query = 'INSERT INTO resident_inquiry (u_no, c_no, title, content, status) VALUES (?, ?, ?, ?, "pending")';
+    const query = 'INSERT INTO resident_inquiry (u_no, c_no, title, content, status, created_at) VALUES (?, ?, ?, ?, "pending", NOW())';
     
     // c_no가 없으면 null을 넣도록 처리
-    db.query(query, [req.user.userId, c_no || null, title, content], (err, result) => {
+   db.query(query, [req.user.userId, c_no || null, title, content], (err, result) => {
         if (err) {
             console.error("❌ 문의 등록 DB 에러:", err); 
             return res.status(500).json({ success: false, message: 'DB 저장 실패' });
         }
-        console.log("✅ 문의 등록 완료!");
-        res.json({ success: true });
+            console.log("✅ 문의 등록 완료!");
+            res.json({ success: true });
     });
 });
 // ---------------------------------------------------------
@@ -313,11 +332,12 @@ app.patch('/api/notifications/:id/read', authenticateToken, (req, res) => {
 // ✅ 기기 알림 토큰(FCM) 저장 (로그인 시 작동)
 app.post('/api/device-token', authenticateToken, (req, res) => {
     const { fcm_token } = req.body;
-    const tempDeviceId = 'device_' + req.user.userId; // 임시 디바이스 ID 생성
-    const query = `
-        INSERT INTO device_info (device_id, u_no, fcm_token) 
-        VALUES (?, ?, ?) 
-        ON DUPLICATE KEY UPDATE fcm_token = ?`;
+    const tempDeviceId = 'device_' + req.user.userId;
+const query = `
+        INSERT INTO device_info (device_id, u_no, fcm_token, os_type, last_login) 
+        VALUES (?, ?, ?, 'Android', NOW()) 
+        ON DUPLICATE KEY UPDATE fcm_token = ?, last_login = NOW()`;
+        
     db.query(query, [tempDeviceId, req.user.userId, fcm_token, fcm_token], (err) => {
         if (err) return res.status(500).json({ success: false });
         res.json({ success: true });
@@ -371,8 +391,9 @@ app.post('/api/visitor-entry', (req, res) => {
         
         if (result.affectedRows > 0) {
             console.log(`✅ 방문객 차량 [${c_number}] 실제 입차 완료! 타이머 시작`);
+            
             // ==============================================================
-            // 💡 [여기에 추가!] 2. 입주민에게 방문객 도착 알림 DB 생성하기
+            // 💡 2. 입주민에게 방문객 도착 알림 DB 생성하기
             // ==============================================================
             const notiQuery = `
                 INSERT INTO notifications (u_no, noti_type, noti_title, noti_message)
@@ -381,17 +402,55 @@ app.post('/api/visitor-entry', (req, res) => {
                 WHERE c_number = ?
                 LIMIT 1
             `;
-            // 방금 들어온 차 번호를 이용해 차주(초대한 입주민)를 찾아서 알림을 꽂아줍니다!
             db.query(notiQuery, [c_number, c_number], (notiErr) => {
                 if (notiErr) console.error("❌ 알림 DB 생성 실패:", notiErr);
                 else console.log("✅ 방문객 입차 알림 DB 저장 완료!");
             });
+
             // ==============================================================
+            // 💡 3. [위치 수정됨!] 주차 이력(History) 테이블에 입차 기록 남기기
+            // ==============================================================
+            const historyQuery = `
+                INSERT INTO parking_history 
+                (history_entry_time, history_plate, history_status, history_zone, v_no)
+                VALUES (
+                    NOW(), 
+                    ?,          
+                    'ENTERED',  
+                    '정문 입구', 
+                    (SELECT v_no FROM registered_cars WHERE c_number = ? LIMIT 1)
+                )
+            `;
+            db.query(historyQuery, [c_number, c_number], (historyErr) => {
+                if (historyErr) console.error("❌ 주차 이력 저장 실패:", historyErr);
+                else console.log("✅ 방문객 입차 이력 저장 완료!");
+            });
+            // ==============================================================
+
             res.json({ success: true, message: '입차 처리 및 타이머 시작 완료' });
         } else {
             res.status(404).json({ success: false, message: '등록되지 않은 방문객 차량이거나 이미 주차 중입니다.' });
         }
     });
+});
+// ==============================================================
+// 💡 [새로 추가] 3. 주차 이력(History) 테이블에 입차 기록 남기기
+// ==============================================================
+const historyQuery = `
+    INSERT INTO parking_history 
+    (history_entry_time, history_plate, history_status, history_zone, v_no)
+    VALUES (
+        NOW(), 
+        ?,          // c_number (웹캠이 인식한 번호판)
+        'ENTERED',  // 상태 (입차)
+        '정문 입구', // history_zone (DB에서 NOT NULL이므로 구역명 지정 필요)
+        (SELECT v_no FROM registered_cars WHERE c_number = ? LIMIT 1)
+    )
+`;
+
+db.query(historyQuery, [c_number, c_number], (err) => {
+    if (err) console.error("❌ 주차 이력 저장 실패:", err);
+    else console.log("✅ 방문객 입차 이력 저장 완료!");
 });
 // 👇👇 [여기에 새로 추가!] 하드웨어(카메라)가 주차 상태 변경(선 넘음 등)을 감지했을 때 호출하는 API 👇👇
 app.post('/api/parking-update', (req, res) => {
