@@ -3,6 +3,7 @@ const mysql = require('mysql2');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
@@ -10,14 +11,12 @@ app.use(express.json());
 
 const JWT_SECRET = 'my_super_secret_parking_key_2026!';
 
-// 🗄️ DB 연결 정보 수정
 const db = mysql.createConnection({
-    host: 'graduation.cpoma4qy004x.ap-southeast-2.rds.amazonaws.com',
-    user: 'admin',
-    password: 'dlxogud12!', 
-    database: 'datasample' // 👈 'datasample'에서 다시 'parking_db'로 변경!
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD, // 👈 여기서 불러옵니다!
+    database: process.env.DB_DATABASE
 });
-
 db.connect(err => {
     if (err) return console.error('❌ DB 연결 실패:', err);
     console.log('✅ MySQL 연결 성공!');
@@ -433,25 +432,7 @@ app.post('/api/visitor-entry', (req, res) => {
         }
     });
 });
-// ==============================================================
-// 💡 [새로 추가] 3. 주차 이력(History) 테이블에 입차 기록 남기기
-// ==============================================================
-const historyQuery = `
-    INSERT INTO parking_history 
-    (history_entry_time, history_plate, history_status, history_zone, v_no)
-    VALUES (
-        NOW(), 
-        ?,          // c_number (웹캠이 인식한 번호판)
-        'ENTERED',  // 상태 (입차)
-        '정문 입구', // history_zone (DB에서 NOT NULL이므로 구역명 지정 필요)
-        (SELECT v_no FROM registered_cars WHERE c_number = ? LIMIT 1)
-    )
-`;
 
-db.query(historyQuery, [c_number, c_number], (err) => {
-    if (err) console.error("❌ 주차 이력 저장 실패:", err);
-    else console.log("✅ 방문객 입차 이력 저장 완료!");
-});
 // 👇👇 [여기에 새로 추가!] 하드웨어(카메라)가 주차 상태 변경(선 넘음 등)을 감지했을 때 호출하는 API 👇👇
 app.post('/api/parking-update', (req, res) => {
     // 하드웨어가 배열로 [{'slot': 'A-1', 'status': 'error'}, {'slot': 'A-2', 'status': 'error'}] 보낸다고 가정
