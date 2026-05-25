@@ -18,6 +18,12 @@ const String baseUrl = 'http://10.0.2.2:3000';
 // 전역 변수: 스마트폰 안전 금고 & 다크모드 리모컨
 final storage = FlutterSecureStorage();
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+// 💡 [수정 위치 1] 여기에 함수를 통째로 추가하세요. (main 함수 바깥입니다)
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("백그라운드 메시지 수신: ${message.messageId}");
+}
 
 void main() async {
   // 1. 플러터 엔진과 프레임워크가 자리를 잡을 때까지 기다립니다.
@@ -25,6 +31,8 @@ void main() async {
 
   // 2. 파이어베이스를 우리 앱의 설정값(DefaultFirebaseOptions)으로 초기화합니다.
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // 3. 모든 준비가 끝나면 비로소 앱을 실행합니다.
   runApp(const MyApp());

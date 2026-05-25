@@ -212,6 +212,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _navigateTo(const InquiryScreen());
             },
           ),
+          // 👇👇 [여기에 추가!] 푸시 알림 테스트 버튼 👇👇
+          _buildMenuItem(
+            icon: Icons.rocket_launch, // 로켓 아이콘!
+            title: '푸시 알림 쏴보기 🚀',
+            onTap: () async {
+              const storage = FlutterSecureStorage();
+              String? token = await storage.read(key: 'jwt_token');
+              if (token == null) return;
+
+              final url = Uri.parse('$baseUrl/api/test-push');
+              try {
+                await http.post(
+                  url,
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer $token",
+                  },
+                );
+                // 버튼을 눌렀다는 피드백을 화면 아래에 잠깐 띄워줍니다.
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('서버로 알림 전송을 요청했습니다! 1~2초만 기다려보세요.'),
+                  ),
+                );
+              } catch (e) {
+                print("알림 테스트 에러: $e");
+              }
+            },
+          ),
+          // 👆👆 여기까지 추가 👆👆
           _buildMenuItem(
             icon: Icons.info_outline,
             title: '앱 버전 정보',
