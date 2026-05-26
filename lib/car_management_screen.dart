@@ -277,21 +277,43 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
         Color timeColor = Colors.redAccent;
 
         if (expireDate.isEmpty || expireDate == 'null') {
-          // 아직 입차하지 않아서 만료 시간이 NULL인 경우
           displayTimeText = '⏳ 입차 대기 중 (입차 시 24시간 시작)';
-          timeColor = Colors.orange; // 대기 중은 오렌지색
+          timeColor = Colors.orange;
         } else {
-          // 입차해서 만료 시간이 계산된 경우
           if (expireDate.contains('T')) {
             try {
-              DateTime dt = DateTime.parse(expireDate).toLocal();
-              expireDate =
-                  '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-            } catch (e) {}
-          }
-          displayTimeText = '만료: $expireDate';
-        }
+              // 1. DB의 만료 시간을 가져옵니다.
+              DateTime expireDt = DateTime.parse(expireDate).toLocal();
+              // 2. 현재 시간과 비교해서 '남은 시간'을 계산합니다!
+              Duration diff = expireDt.difference(DateTime.now());
 
+              if (diff.isNegative) {
+                // 이미 만료 시간이 지난 경우
+                displayTimeText = '만료됨 (곧 자동 출차 처리됩니다)';
+                timeColor = Colors.grey;
+              } else {
+                // 남은 시간을 시간과 분으로 쪼갭니다.
+                int hours = diff.inHours;
+                int minutes = diff.inMinutes % 60;
+
+                if (hours > 0) {
+                  displayTimeText = '⏳ 남은 시간: $hours시간 $minutes분';
+                } else {
+                  displayTimeText = '🚨 남은 시간: $minutes분'; // 1시간 미만일 때
+                }
+
+                // 남은 시간이 3시간(180분) 미만이면 빨간색 경고, 아니면 파란색으로 안정감 있게!
+                timeColor = diff.inMinutes < 180
+                    ? Colors.redAccent
+                    : Colors.blueAccent;
+              }
+            } catch (e) {
+              displayTimeText = '시간 계산 오류';
+            }
+          } else {
+            displayTimeText = '만료: $expireDate';
+          }
+        }
         return Card(
           elevation: 0,
           margin: const EdgeInsets.only(bottom: 12),
