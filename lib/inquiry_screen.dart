@@ -35,6 +35,8 @@ class _InquiryScreenState extends State<InquiryScreen> {
           "Authorization": "Bearer $token",
         },
       ); // 여기도 .timeout(const Duration(seconds: 3)) 붙여주시면 좋습니다!
+      // 👇 [여기에 추가!] 서버 통신(http.get)이 끝난 바로 다음 줄입니다.
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -278,8 +280,13 @@ class _InquiryScreenState extends State<InquiryScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  item['answer'],
-                                  style: const TextStyle(fontSize: 14),
+                                  item['answer'] ?? '아직 관리자 답변이 등록되지 않았습니다.',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: item['answer'] == null
+                                        ? Colors.grey
+                                        : Colors.black87,
+                                  ),
                                 ),
                               ],
                             ),

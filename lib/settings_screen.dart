@@ -23,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _userName = "로딩 중...";
   String _userDong = "";
   String _userHo = "";
+  String _aptName = ""; // 👈 [추가] 아파트 이름을 담을 빈 상자 만들기!
   String _myCarPlate = "등록 차량 없음";
   String _myCarModel = "차량을 등록해주세요";
 
@@ -51,6 +52,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         },
       );
 
+      // 👇 1. 여기에 한 줄 추가!
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -58,11 +62,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _userName = data['user']['u_name'];
             _userDong = data['user']['u_dong'];
             _userHo = data['user']['u_ho'];
+            // 👇 [추가] 서버에서 'a_name'을 주면 넣고, 혹시 안 주면 기본값 설정
+            _aptName = data['user']['a_name'] ?? '스마트 아파트';
           });
         }
       }
     } catch (e) {
       print("내 정보 불러오기 실패: $e");
+      // 👇 여기에 방어막 딱 한 줄 추가! (화면이 꺼졌으면 여기서 코드 실행을 멈춤)
+      if (!mounted) return;
       setState(() {
         _userName = "홍길동"; // 통신 실패 시 기본값
         _userDong = "101동";
@@ -82,6 +90,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         url,
         headers: {"Authorization": "Bearer $token"},
       );
+      // 👇 4. 여기에 한 줄 추가!
+      if (!mounted) return;
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true &&
@@ -113,7 +123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
         },
-        body: jsonEncode({"alert_push": value ? 1 : 0}), // true면 1, false면 0 전송
+        body: jsonEncode({"alert_push": value}),
       );
     } catch (e) {
       print("알림 설정 동기화 실패: $e");
@@ -213,35 +223,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
           // 👇👇 [여기에 추가!] 푸시 알림 테스트 버튼 👇👇
-          _buildMenuItem(
-            icon: Icons.rocket_launch, // 로켓 아이콘!
-            title: '푸시 알림 쏴보기 🚀',
-            onTap: () async {
-              const storage = FlutterSecureStorage();
-              String? token = await storage.read(key: 'jwt_token');
-              if (token == null) return;
+          // _buildMenuItem(
+          //   icon: Icons.rocket_launch, // 로켓 아이콘!
+          //   title: '푸시 알림 쏴보기 🚀',
+          //   onTap: () async {
+          ////     const storage = FlutterSecureStorage();
+          //     String? token = await storage.read(key: 'jwt_token');
+          //      if (token == null) return;
 
-              final url = Uri.parse('$baseUrl/api/test-push');
-              try {
-                await http.post(
-                  url,
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer $token",
-                  },
-                );
-                // 버튼을 눌렀다는 피드백을 화면 아래에 잠깐 띄워줍니다.
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('서버로 알림 전송을 요청했습니다! 1~2초만 기다려보세요.'),
-                  ),
-                );
-              } catch (e) {
-                print("알림 테스트 에러: $e");
-              }
-            },
-          ),
+          //     final url = Uri.parse('$baseUrl/api/test-push');
+          //     try {
+          //       await http.post(
+          //         url,
+          //         headers: {
+          //          "Content-Type": "application/json",
+          //          "Authorization": "Bearer $token",
+          //        },
+          //      );
+          // 버튼을 눌렀다는 피드백을 화면 아래에 잠깐 띄워줍니다.
+          //       if (!mounted) return;
+          //      ScaffoldMessenger.of(context).showSnackBar(
+          //       const SnackBar(
+          //         content: Text('서버로 알림 전송을 요청했습니다! 1~2초만 기다려보세요.'),
+          //       ),
+          //     );
+          //    } catch (e) {
+          //      print("알림 테스트 에러: $e");
+          //    }
+          //   },
+          // ),
           // 👆👆 여기까지 추가 👆👆
           _buildMenuItem(
             icon: Icons.info_outline,
@@ -333,7 +343,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               Text(
-                '명학아파트 $displayDong $displayHo',
+                '$_aptName $displayDong $displayHo',
                 style: TextStyle(color: Colors.grey[600], fontSize: 13),
               ),
             ],

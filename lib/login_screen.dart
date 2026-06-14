@@ -62,6 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
             print("FCM 토큰 전송 실패 (서버 연동 전까지는 무시하셔도 됩니다): $e");
           }
           // 👆 여기까지 추가 완료 👆
+          if (!mounted) return; // 👇 화면 이동 직전에 안전장치 딱 한 줄 추가!
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const MainTabScreen()),
@@ -167,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'SMART',
+                          'Park On',
                           style: TextStyle(
                             fontSize: 34,
                             fontWeight: FontWeight.w900,
@@ -177,7 +178,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         Text(
-                          'PARKING',
+                          '주차칸에 스마트를 켜다',
                           style: TextStyle(
                             fontSize: 34,
                             fontWeight: FontWeight.w900,

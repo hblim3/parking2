@@ -12,18 +12,55 @@ class CarManagementScreen extends StatefulWidget {
 }
 
 class _CarManagementScreenState extends State<CarManagementScreen> {
-  // 💡 서버에서 두 개의 리스트를 따로 받을 준비!
   List<dynamic> residentCars = [];
   List<dynamic> visitorCars = [];
   bool isLoading = true;
 
+  // 💡 서버에서 받아올 제한 대수 변수 (과거로 돌아가서 지워졌던 것 복구!)
+  int residentCarLimit = 1;
+  int visitorCarLimit = 2;
+
+  // 👇 [추가] 주차장 80% 초과 여부를 담을 변수
+  bool _isOver80 = false;
+
   @override
   void initState() {
     super.initState();
+    _fetchUserInfo();
     _fetchCars();
+    _checkOccupancy(); // 👈 [추가] 혼잡도 체크 함수 실행!
   }
 
-  // 1. 서버에서 차량 목록 불러오기 (토큰 추가 완료)
+  // 💡 내 정보(등록 제한 대수)를 불러오는 함수 복구!
+  Future<void> _fetchUserInfo() async {
+    const storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'jwt_token');
+
+    if (token == null) return;
+
+    final url = Uri.parse('$baseUrl/api/user-info');
+    try {
+      final response = await http.get(
+        url,
+        headers: {"Authorization": "Bearer $token"},
+      );
+      // 👇 2. 여기에 한 줄 추가!
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (mounted) {
+          setState(() {
+            residentCarLimit = data['user']['resident_car_limit'] ?? 1;
+            visitorCarLimit = data['user']['visitor_car_limit'] ?? 2;
+          });
+        }
+      }
+    } catch (e) {
+      print("내 정보 불러오기 실패: $e");
+    }
+  }
+
   Future<void> _fetchCars() async {
     const storage = FlutterSecureStorage();
     String? token = await storage.read(key: 'jwt_token');
@@ -37,12 +74,15 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
     try {
       final response = await http.get(
         url,
-        // 💡 서버에게 내 출입증(토큰) 보여주기!
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
         },
       );
+
+      // 👇 3. 여기에 한 줄 추가!
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -51,8 +91,6 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
             visitorCars = data['visitor_cars'] ?? [];
           });
         }
-      } else {
-        print('차량 목록 불러오기 거절됨: ${response.statusCode}');
       }
     } catch (e) {
       print("서버 연결 실패 - 시연용 데이터를 표시합니다.");
@@ -69,67 +107,114 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
         ];
       });
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) {
+        // 👇 화면이 살아있을 때만 로딩을 끄도록 수정!
+        setState(() => isLoading = false);
+      }
     }
   }
 
-  // 2. 서버에 새 차량 등록하기 (토큰 추가 & baseUrl 적용 완료)
-  Future<void> _addCar(
-    String carNumber,
-    String carName,
-    String carType,
-    String carNote,
-  ) async {
+  // 👇 [추가] 현재 주차장 혼잡도를 체크하는 함수
+  Future<void> _checkOccupancy() async {
+    final url = Uri.parse('$baseUrl/api/app/parking-zones');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        List<dynamic> zones = data['zones'] ?? [];
+
+        int totalSlots = 0;
+        int occupiedSlots = 0;
+
+        for (var zone in zones) {
+          if (zone['type'] != 'aisle') {
+            totalSlots++;
+            String status = zone['status']?.toString().toLowerCase() ?? '';
+            if (status == 'occupied' ||
+                status == '사용중' ||
+                status == 'reserved' ||
+                zone['isOccupied'] == true) {
+              occupiedSlots++;
+            }
+          }
+        }
+
+        if (!mounted) return;
+        setState(() {
+          // 점유율이 80% 이상인지 판별하여 변수에 저장
+          _isOver80 = totalSlots == 0
+              ? false
+              : (occupiedSlots / totalSlots) >= 0.8;
+        });
+      }
+    } catch (e) {
+      print("차량관리창 혼잡도 조회 실패: $e");
+    }
+  }
+
+  Future<void> _addCar(String carNumber, String carName, String carType) async {
     const storage = FlutterSecureStorage();
     String? token = await storage.read(key: 'jwt_token');
-
     if (token == null) return;
 
-    // 💡 $baseUrl 로 수정 완료!
     final url = Uri.parse('$baseUrl/api/cars');
     try {
       final response = await http.post(
         url,
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer $token", // 💡 서버에게 내 출입증(토큰) 보여주기!
+          "Authorization": "Bearer $token",
         },
         body: jsonEncode({
           "c_number": carNumber,
           "c_name": carName,
           "car_type": carType,
-          "c_note": carNote,
         }),
       );
 
-      final data = jsonDecode(response.body);
-      if (data['success'] == true) {
-        _fetchCars(); // 💡 등록 성공 시 목록 새로고침
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('등록 완료')));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (response.body.isNotEmpty) {
+          final data = jsonDecode(response.body);
+          if (data['success'] == true) {
+            _fetchCars();
+            if (!mounted) return;
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('등록 완료')));
+          }
+        }
       } else {
-        // 서버에서 에러 메시지를 보낸 경우 (예: "방문객 등록 에러")
+        print("🚨 서버 거절 코드: ${response.statusCode}");
+        String errorMessage = '차량 등록에 실패했습니다. (등록 대수 초과 또는 서버 오류)';
+
+        if (response.body.isNotEmpty) {
+          try {
+            final errorData = jsonDecode(response.body);
+            errorMessage = errorData['message'] ?? errorMessage;
+          } catch (e) {
+            print("에러 응답 파싱 실패 (무시됨)");
+          }
+        }
+
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(data['message'] ?? '등록 실패')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     } catch (e) {
-      print("차량 등록 실패: $e");
+      print("차량 등록 통신 에러: $e");
     }
   }
-  // ... 기존 _addCar 함수 끝나는 부분 ...
 
-  // 💡 [추가] 4. 서버에 차량 삭제 요청하기
   Future<void> _deleteCar(String carNumber) async {
     const storage = FlutterSecureStorage();
     String? token = await storage.read(key: 'jwt_token');
 
     if (token == null) return;
 
-    // 💡 차량 번호의 한글과 띄어쓰기를 컴퓨터가 읽을 수 있는 주소 형식으로 변환합니다.
     final url = Uri.parse(
       '$baseUrl/api/cars/${Uri.encodeComponent(carNumber)}',
     );
@@ -141,7 +226,7 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
       );
 
       if (response.statusCode == 200) {
-        _fetchCars(); // 💡 삭제 성공 시 목록을 다시 불러와 화면 새로고침!
+        _fetchCars();
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
@@ -157,13 +242,11 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
     }
   }
 
-  // ... 기존 _showAddCarDialog 함수 시작 부분 ...
-  // 3. 차량 추가 팝업
-  void _showAddCarDialog() {
+  // 💡 [수정] 괄호 안에 carType(입주민 또는 방문객)을 전달받도록 변경합니다.
+  void _showAddCarDialog(String carType) {
     final TextEditingController numberController = TextEditingController();
     final TextEditingController nameController = TextEditingController();
-    final TextEditingController noteController = TextEditingController();
-    String selectedType = '입주민';
+    // ❌ 차량 구분 드롭다운 변수(selectedType) 삭제 완료!
 
     showDialog(
       context: context,
@@ -171,54 +254,92 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
-              title: const Text(
-                '차량 등록',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              // 💡 전달받은 타입에 따라 제목이 "입주민 등록" 또는 "방문객 등록"으로 바뀝니다.
+              title: Text(
+                '$carType 등록',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    value: selectedType,
-                    decoration: const InputDecoration(
-                      labelText: '차량 구분',
-                      border: OutlineInputBorder(),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.blueGrey[50],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '💡 등록 가능 대수 안내\n• 입주민 차량: $residentCarLimit대\n• 방문객 차량: $visitorCarLimit대\n(그 외 추가 등록은 관리자에 문의하세요)',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.black87,
+                          height: 1.5,
+                        ),
+                      ),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: '입주민', child: Text('입주민 차량')),
-                      DropdownMenuItem(
-                        value: '방문객',
-                        child: Text('방문객 차량 (24시간)'),
+
+                    // ❌ 드롭다운 메뉴(DropdownButtonFormField) 완전 삭제됨!
+
+                    // 👇 전달받은 타입이 방문객이고 80% 초과일 때 경고창 띄우기
+                    if (carType == '방문객' && _isOver80) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.redAccent,
+                            width: 1.2,
+                          ),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.redAccent,
+                              size: 20,
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '🚨 현재 주차장 점유율이 80%를 초과하여 대단히 혼잡합니다. 지금 방문 차량을 등록하더라도 주차 여유가 생길 때까지 정문 차단기가 열리지 않습니다.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                    onChanged: (value) =>
-                        setStateDialog(() => selectedType = value!),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: numberController,
-                    decoration: const InputDecoration(
-                      labelText: '차량 번호',
-                      border: OutlineInputBorder(),
+
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: numberController,
+                      decoration: const InputDecoration(
+                        labelText: '차량 번호',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: '모델명',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: '모델명',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: noteController,
-                    decoration: const InputDecoration(
-                      labelText: '비고 (방문 목적 등)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -226,16 +347,37 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
                   child: const Text('취소'),
                 ),
                 ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: (carType == '방문객' && _isOver80)
+                        ? Colors.grey
+                        : Colors.black87,
+                  ),
                   onPressed: () {
+                    // 👇 [핵심 방어막]
+                    if (carType == '방문객' && _isOver80) {
+                      FocusScope.of(context).unfocus();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('🚨 혼잡도가 높아 현재 방문 차량을 등록할 수 없습니다.'),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                      return;
+                    }
+
                     if (numberController.text.isNotEmpty &&
                         nameController.text.isNotEmpty) {
+                      FocusScope.of(context).unfocus();
                       _addCar(
                         numberController.text,
                         nameController.text,
-                        selectedType,
-                        noteController.text,
+                        carType, // 👈 넘겨받은 carType으로 서버에 전송합니다!
                       );
                       Navigator.pop(context);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('차량 번호와 모델명을 입력해주세요.')),
+                      );
                     }
                   },
                   child: const Text('등록'),
@@ -248,7 +390,6 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
     );
   }
 
-  // 💡 탭 내부의 리스트를 그려주는 공통 함수 (삭제 버튼 추가 완료!)
   Widget _buildCarList(List<dynamic> cars, bool isVisitor) {
     if (cars.isEmpty) {
       return Center(
@@ -265,13 +406,17 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
         final car = cars[index];
         final String currentCarNumber = car['c_number'] ?? '번호 없음';
 
-        // 💡 [수정 1] 차량 이름(모델명) 처리 - 비어있으면 알맞은 글씨로 채워줍니다!
+        // ✅ 변경할 코드 (모델명을 서랍에서 꺼내 괄호 안에 합쳐줍니다!)
         String carName = car['c_name']?.toString() ?? '';
+        String carKind = car['c_kind']?.toString() ?? '';
+
+        if (carKind.isNotEmpty) {
+          carName = '$carName ($carKind)'; // 화면 출력 결과: "홍길동 차량 (테슬라)"
+        }
         if (carName.isEmpty) {
           carName = isVisitor ? '방문객 차량' : '입주민 등록 차량';
         }
 
-        // 💡 [수정] 만료 시간 표시 로직
         String expireDate = car['expire_date']?.toString() ?? '';
         String displayTimeText = '';
         Color timeColor = Colors.redAccent;
@@ -282,27 +427,22 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
         } else {
           if (expireDate.contains('T')) {
             try {
-              // 1. DB의 만료 시간을 가져옵니다.
               DateTime expireDt = DateTime.parse(expireDate).toLocal();
-              // 2. 현재 시간과 비교해서 '남은 시간'을 계산합니다!
               Duration diff = expireDt.difference(DateTime.now());
 
               if (diff.isNegative) {
-                // 이미 만료 시간이 지난 경우
                 displayTimeText = '만료됨 (곧 자동 출차 처리됩니다)';
                 timeColor = Colors.grey;
               } else {
-                // 남은 시간을 시간과 분으로 쪼갭니다.
                 int hours = diff.inHours;
                 int minutes = diff.inMinutes % 60;
 
                 if (hours > 0) {
                   displayTimeText = '⏳ 남은 시간: $hours시간 $minutes분';
                 } else {
-                  displayTimeText = '🚨 남은 시간: $minutes분'; // 1시간 미만일 때
+                  displayTimeText = '🚨 남은 시간: $minutes분';
                 }
 
-                // 남은 시간이 3시간(180분) 미만이면 빨간색 경고, 아니면 파란색으로 안정감 있게!
                 timeColor = diff.inMinutes < 180
                     ? Colors.redAccent
                     : Colors.blueAccent;
@@ -344,15 +484,7 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 👇 빈칸 대신 위에서 만든 carName('방문객 차량')이 들어갑니다.
                   Text(carName, style: const TextStyle(color: Colors.black87)),
-                  if (car['c_note'] != null &&
-                      car['c_note'].toString().isNotEmpty)
-                    Text(
-                      '비고: ${car['c_note']}',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  // 👇 지저분한 시간 대신 위에서 변환한 예쁜 expireDate가 들어갑니다.
                   if (isVisitor)
                     Text(
                       displayTimeText,
@@ -411,7 +543,7 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2, // 💡 탭을 2개로 나눕니다.
+      length: 2,
       child: Scaffold(
         backgroundColor: Colors.grey[100],
         appBar: AppBar(
@@ -432,24 +564,49 @@ class _CarManagementScreenState extends State<CarManagementScreen> {
           ),
         ),
         body: isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.black87),
-              )
+            ? const CustomLoading() // 👈 딱 이 한 줄로 깔끔하게 교체!
             : TabBarView(
                 children: [
-                  _buildCarList(residentCars, false), // 첫 번째 탭: 입주민
-                  _buildCarList(visitorCars, true), // 두 번째 탭: 방문객
+                  _buildCarList(residentCars, false),
+                  _buildCarList(visitorCars, true),
                 ],
               ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _showAddCarDialog,
-          backgroundColor: Colors.black87,
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.add),
-          label: const Text(
-            '차량 추가',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+        // 👇 [수정됨] Builder를 추가하여 현재 활성화된 탭을 정확하게 읽어옵니다!
+        floatingActionButton: Builder(
+          builder: (fabContext) {
+            return FloatingActionButton.extended(
+              onPressed: () async {
+                await _checkOccupancy();
+
+                // 💡 DefaultTabController의 현재 탭 인덱스 (0: 입주민, 1: 방문객)
+                int currentTab = DefaultTabController.of(fabContext).index;
+                String currentCarType = currentTab == 0 ? '입주민' : '방문객';
+
+                if (currentTab == 1 && _isOver80) {
+                  ScaffoldMessenger.of(fabContext).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        '⚠️ 현재 주차장이 80% 이상 혼잡하여 방문 차량을 등록할 수 없습니다.',
+                      ),
+                      backgroundColor: Colors.redAccent,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                  return; // 등록 팝업 띄우지 않음
+                }
+
+                // 💡 위에서 판단한 현재 탭의 종류(currentCarType)를 팝업창으로 전달합니다!
+                _showAddCarDialog(currentCarType);
+              },
+              backgroundColor: Colors.black87,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text(
+                '차량 추가',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            );
+          },
         ),
       ),
     );

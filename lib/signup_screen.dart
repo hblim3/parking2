@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'main.dart';
+import 'package:flutter/services.dart'; // 👈 [이 줄을 추가해 주세요!] 입력 제어 도구
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
@@ -152,8 +153,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 Expanded(
                   child: TextField(
                     controller: _dongController,
+                    keyboardType: TextInputType
+                        .number, // 👈 [방어 1] 터치 시 '숫자 전용 키패드'가 올라옵니다.
+                    inputFormatters: [
+                      FilteringTextInputFormatter
+                          .digitsOnly, // 👈 [방어 2] 혹시 복사/붙여넣기를 해도 '숫자'만 남기고 다 지워버립니다!
+                    ],
                     decoration: const InputDecoration(
-                      labelText: '동 (예: 101동)',
+                      labelText: '동 (숫자만 입력)', // 안내 문구 수정
+                      hintText: '예: 101',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -162,8 +170,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 Expanded(
                   child: TextField(
                     controller: _hoController,
+                    keyboardType: TextInputType.number, // 👈 동일하게 숫자 패드 적용
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly, // 👈 동일하게 숫자만 허용
+                    ],
                     decoration: const InputDecoration(
-                      labelText: '호 (예: 202호)',
+                      labelText: '호 (숫자만 입력)', // 안내 문구 수정
+                      hintText: '예: 1101',
                       border: OutlineInputBorder(),
                     ),
                   ),
